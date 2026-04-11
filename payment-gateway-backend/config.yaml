@@ -1,0 +1,23 @@
+server:
+  port: 8081
+  mode: debug
+
+database:
+  host: localhost
+  port: 15432
+  user: postgres
+  password: Raj@76330Raj
+  dbname: advancePayment
+  sslmode: disable
+
+redis:
+  host: localhost
+  port: 6379
+  db: 0
+
+kafka:
+  brokers:
+    - localhost:9092
+
+ml_services:
+  fraud_url: http://localhost:8000

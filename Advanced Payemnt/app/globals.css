@@ -1,0 +1,119 @@
+@import "tailwindcss";
+@import '../node_modules/tw-animate-css/dist/tw-animate.css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Fintech Color Palette */
+  --background: #ffffff;
+  --foreground: #001f4d;
+  --card: #f8fafc;
+  --card-foreground: #001f4d;
+  --popover: #ffffff;
+  --popover-foreground: #001f4d;
+  --primary: #0066ff;
+  --primary-foreground: #ffffff;
+  --secondary: #001f4d;
+  --secondary-foreground: #ffffff;
+  --muted: #e2e8f0;
+  --muted-foreground: #64748b;
+  --accent: #0066ff;
+  --accent-foreground: #ffffff;
+  --success: #00b894;
+  --success-foreground: #ffffff;
+  --warning: #fdcb6e;
+  --warning-foreground: #001f4d;
+  --destructive: #ff7675;
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0;
+  --input: #f1f5f9;
+  --ring: #0066ff;
+  --chart-1: #0066ff;
+  --chart-2: #00b894;
+  --chart-3: #fdcb6e;
+  --chart-4: #ff7675;
+  --chart-5: #7c3aed;
+  --radius: 0.5rem;
+}
+
+.dark {
+  /* Dark Mode - Navy/Blue theme */
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --card: #1e293b;
+  --card-foreground: #f1f5f9;
+  --popover: #1e293b;
+  --popover-foreground: #f1f5f9;
+  --primary: #0066ff;
+  --primary-foreground: #001f4d;
+  --secondary: #64748b;
+  --secondary-foreground: #f1f5f9;
+  --muted: #334155;
+  --muted-foreground: #cbd5e1;
+  --accent: #0066ff;
+  --accent-foreground: #001f4d;
+  --success: #10b981;
+  --success-foreground: #1e293b;
+  --warning: #f59e0b;
+  --warning-foreground: #1e293b;
+  --destructive: #ef4444;
+  --destructive-foreground: #1e293b;
+  --border: #334155;
+  --input: #1e293b;
+  --ring: #0066ff;
+  --chart-1: #0066ff;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #a78bfa;
+}
+
+@theme {
+  --font-sans: 'Geist', 'Geist Fallback';
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
