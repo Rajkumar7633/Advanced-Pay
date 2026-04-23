@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/yourcompany/payment-gateway/internal/domain/models"
 	"github.com/yourcompany/payment-gateway/internal/domain/repository"
 	"github.com/yourcompany/payment-gateway/pkg/logger"

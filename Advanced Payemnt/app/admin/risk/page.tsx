@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ShieldAlert, GlobeLock, Target, Activity, Zap, Play, ArrowLeft } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
+import { AdminNav } from '@/components/admin/admin-nav';
 
 interface FraudAnomaly {
   id: string;
@@ -66,13 +67,15 @@ export default function SuperAdminRiskCenter() {
       
       {/* ── Top Navigation Bar ── */}
       <header className="border-b border-white/5 bg-black/40 backdrop-blur-3xl sticky top-0 z-40 transition-all shadow-sm">
-        <div className="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-6">
+        <div className="max-w-[1600px] mx-auto px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-4 lg:gap-6">
             <Link href="/admin/dashboard" className="flex items-center gap-2 text-muted-foreground hover:text-white transition-colors">
                 <ArrowLeft className="w-4 h-4" />
                 <span className="text-sm font-semibold">Back to OS</span>
             </Link>
-            <div className="w-px h-6 bg-white/10" />
+            <div className="hidden sm:block w-px h-6 bg-white/10" />
+            <AdminNav className="border-white/10 bg-white/5" />
+            <div className="hidden lg:block w-px h-6 bg-white/10" />
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-red-600 via-red-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-red-500/20 border border-white/10">
                 <ShieldAlert className="w-5 h-5 text-white" />

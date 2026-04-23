@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { CreditCard, Lock } from 'lucide-react';
+import { HolographicCard } from '@/components/checkout/holographic-card';
+import { FraudRadar } from '@/components/checkout/fraud-radar';
 
 interface CardFormProps {
   onSubmit: (data: any) => Promise<void>;
@@ -12,6 +14,8 @@ interface CardFormProps {
 }
 
 export default function CardForm({ onSubmit, isProcessing }: CardFormProps) {
+  const [focusedField, setFocusedField] = useState<'number' | 'name' | 'expiry' | 'cvc' | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
   const [cardData, setCardData] = useState({
     cardNumber: '',
     cardHolder: '',
@@ -23,6 +27,7 @@ export default function CardForm({ onSubmit, isProcessing }: CardFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setIsTyping(true);
     const { name, value } = e.target;
     let formattedValue = value;
 
@@ -32,8 +37,8 @@ export default function CardForm({ onSubmit, isProcessing }: CardFormProps) {
     }
 
     setCardData((prev) => ({
-      ...prev,
-      [name]: formattedValue,
+       ...prev,
+       [name]: formattedValue,
     }));
   };
 
@@ -68,13 +73,24 @@ export default function CardForm({ onSubmit, isProcessing }: CardFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
+    <div className="space-y-4 relative z-10 w-full overflow-hidden px-1">
+      <HolographicCard 
+         focusedField={focusedField} 
+         cardNumber={cardData.cardNumber}
+         cardName={cardData.cardHolder}
+         expiry={`${cardData.expiryMonth}${cardData.expiryYear ? '/' : ''}${cardData.expiryYear}`}
+         cvv={cardData.cvv}
+      />
+      
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
         <label className="text-sm font-medium text-gray-300">Card Number</label>
         <div className="relative">
           <Input
             name="cardNumber"
             value={cardData.cardNumber}
+            onFocus={() => setFocusedField('number')}
+            onBlur={() => setFocusedField(null)}
             onChange={handleInputChange}
             placeholder="1234 5678 9012 3456"
             maxLength={19}
@@ -93,6 +109,8 @@ export default function CardForm({ onSubmit, isProcessing }: CardFormProps) {
         <Input
           name="cardHolder"
           value={cardData.cardHolder}
+          onFocus={() => setFocusedField('name')}
+          onBlur={() => setFocusedField(null)}
           onChange={handleInputChange}
           placeholder="John Doe"
           className="bg-slate-700 border-slate-600 text-white placeholder:text-gray-500"
@@ -110,6 +128,8 @@ export default function CardForm({ onSubmit, isProcessing }: CardFormProps) {
             <Input
               name="expiryMonth"
               value={cardData.expiryMonth}
+              onFocus={() => setFocusedField('expiry')}
+              onBlur={() => setFocusedField(null)}
               onChange={handleInputChange}
               placeholder="MM"
               maxLength={2}
@@ -122,6 +142,8 @@ export default function CardForm({ onSubmit, isProcessing }: CardFormProps) {
             <Input
               name="expiryYear"
               value={cardData.expiryYear}
+              onFocus={() => setFocusedField('expiry')}
+              onBlur={() => setFocusedField(null)}
               onChange={handleInputChange}
               placeholder="YY"
               maxLength={2}
@@ -141,6 +163,8 @@ export default function CardForm({ onSubmit, isProcessing }: CardFormProps) {
             <Input
               name="cvv"
               value={cardData.cvv}
+              onFocus={() => setFocusedField('cvc')}
+              onBlur={() => setFocusedField(null)}
               onChange={handleInputChange}
               placeholder="123"
               maxLength={4}
@@ -156,13 +180,21 @@ export default function CardForm({ onSubmit, isProcessing }: CardFormProps) {
         </div>
       </div>
 
-      <Button
-        type="submit"
-        disabled={isProcessing}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2"
-      >
-        {isProcessing ? 'Processing...' : 'Pay Now'}
-      </Button>
+      <div className="pt-2">
+        <Button
+          type="submit"
+          disabled={isProcessing}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2"
+        >
+          {isProcessing ? 'Processing...' : 'Pay Now'}
+        </Button>
+      </div>
+      
+      <FraudRadar 
+        cardBrand={cardData.cardNumber.startsWith('3') ? 'AMEX' : 'VISA'}
+        isTyping={isTyping}
+      />
     </form>
+    </div>
   );
 }

@@ -184,3 +184,60 @@ func (r *webhookRepository) UpdateEventStatus(ctx context.Context, eventID uuid.
 	_, err := r.db.ExecContext(ctx, query, status, attempts, &now, nextRetry, eventID)
 	return err
 }
+
+func (r *webhookRepository) GetEvents(ctx context.Context, merchantID uuid.UUID, limit int, offset int) ([]*models.WebhookEvent, error) {
+	query := `
+		SELECT id, merchant_id, event_type, transaction_id, payload, status, attempts, last_attempt, next_retry, created_at
+		FROM webhook_events
+		WHERE merchant_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3`
+
+	rows, err := r.db.QueryxContext(ctx, query, merchantID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*models.WebhookEvent
+	for rows.Next() {
+		var ev models.WebhookEvent
+		var payloadJSON []byte
+		if err := rows.Scan(
+			&ev.ID,
+			&ev.MerchantID,
+			&ev.EventType,
+			&ev.TransactionID,
+			&payloadJSON,
+			&ev.Status,
+			&ev.Attempts,
+			&ev.LastAttempt,
+			&ev.NextRetry,
+			&ev.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		if len(payloadJSON) > 0 {
+			_ = json.Unmarshal(payloadJSON, &ev.Payload)
+		}
+		out = append(out, &ev)
+	}
+	return out, nil
+}
+
+func (r *webhookRepository) ResetEvent(ctx context.Context, eventID uuid.UUID, merchantID uuid.UUID) error {
+	query := `
+		UPDATE webhook_events
+		SET status = 'pending', attempts = 0, next_retry = NULL
+		WHERE id = $1 AND merchant_id = $2
+	`
+	res, err := r.db.ExecContext(ctx, query, eventID, merchantID)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil || affected == 0 {
+		return fmt.Errorf("event not found or unauthorized")
+	}
+	return nil
+}

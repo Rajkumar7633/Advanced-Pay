@@ -22,6 +22,7 @@ import { SmartRoutingWidget } from '@/components/dashboard/smart-routing-widget'
 import { SuccessRateMonitor } from '@/components/dashboard/success-rate-monitor';
 import { FraudScoreCard } from '@/components/dashboard/fraud-score-card';
 import { BlockchainVerification } from '@/components/dashboard/blockchain-verification';
+import { PaymentHubQuickLinks } from '@/components/dashboard/payment-hub-quick-links';
 import { merchantsApi } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -30,11 +31,32 @@ export type DashboardRecentTransaction = DashboardOverviewResponse['recent_trans
 
 const COLORS = ['#0066ff', '#00b894', '#fdcb6e', '#ff7675'];
 
+function periodLabel(period: string) {
+  if (period === '7d') return 'Last 7 days';
+  if (period === '90d') return 'Last 90 days';
+  return 'Last 30 days';
+}
+
+function loadErrMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === 'object' && 'response' in e) {
+    const data = (e as { response?: { data?: { error?: string } } }).response?.data;
+    if (data?.error) return data.error;
+  }
+  return 'Failed to load dashboard';
+}
+
 type DashboardOverviewResponse = {
   total_revenue: any;
   total_transactions: number;
   success_rate: number;
   active_customers: number;
+  comparison?: {
+    revenue_pct_change?: number | null;
+    transactions_pct_change?: number | null;
+    success_rate_pts_change?: number | null;
+    customers_pct_change?: number | null;
+  };
   revenue_trend: Array<{ date: string; amount: any }>;
   payment_method_breakdown: Array<{ name: string; value: number }>;
   recent_transactions: Array<{
@@ -64,7 +86,7 @@ export default function DashboardPage() {
         const res = await merchantsApi.getDashboard({ period: selectedPeriod });
         if (!cancelled) setOverview(res?.data);
       } catch (e) {
-        if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Failed to load dashboard');
+        if (!cancelled) setLoadError(loadErrMessage(e));
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -135,14 +157,45 @@ export default function DashboardPage() {
   const totalTransactions = overview?.total_transactions ?? 0;
   const successRate = overview?.success_rate ?? 0;
   const activeCustomers = overview?.active_customers ?? 0;
+  const comp = overview?.comparison;
+  const pieTotal = transactionData.reduce((s, d) => s + Number(d.value ?? 0), 0);
+
+  const fmtPct = (v: number | null | undefined) => {
+    if (v === null || v === undefined || Number.isNaN(v)) return { text: 'vs prior window —', up: null as boolean | null };
+    const up = v >= 0;
+    return { text: `${up ? '+' : ''}${v.toFixed(1)}% vs prior window`, up };
+  };
+  const fmtPts = (v: number | null | undefined) => {
+    if (v === null || v === undefined || Number.isNaN(v)) return { text: 'vs prior window —', up: null as boolean | null };
+    const up = v >= 0;
+    return { text: `${up ? '+' : ''}${v.toFixed(1)} pts vs prior window`, up };
+  };
 
   return (
     <div>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+          {loadError && (
+            <div
+              className="mb-6 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              role="alert"
+            >
+              {loadError}
+            </div>
+          )}
+          {isLoading && !overview && (
+            <p className="mb-6 text-sm text-muted-foreground">Loading your dashboard…</p>
+          )}
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-foreground mb-2">Dashboard</h1>
-            <p className="text-muted-foreground">Welcome back! Here's your payment overview.</p>
+            <p className="text-muted-foreground">
+              Welcome back — all payment rails are <strong className="text-foreground">Advanced Pay</strong> (India +
+              cross-border). Open the payments hub to test checkout and links.
+            </p>
+          </div>
+
+          <div className="mb-8">
+            <PaymentHubQuickLinks />
           </div>
 
           {/* KPI Cards */}
@@ -160,16 +213,24 @@ export default function DashboardPage() {
                     {formatCurrency(totalRevenue)}
                   </div>
                   <div className="flex items-center gap-1 text-sm">
-                    {revenueData.length > 1 && (
-                      <span className="text-green-600 flex items-center gap-1">
-                        <ArrowUpRight className="w-3 h-3" />
-                        +{((revenueData[revenueData.length - 1]?.amount - revenueData[0]?.amount) / revenueData[0]?.amount * 100).toFixed(1)}%
-                      </span>
-                    )}
+                    {(() => {
+                      const { text, up } = fmtPct(comp?.revenue_pct_change ?? undefined);
+                      if (up === null) {
+                        return <span className="text-muted-foreground">{text}</span>;
+                      }
+                      return (
+                        <span
+                          className={`flex items-center gap-1 ${up ? 'text-green-600' : 'text-red-600'}`}
+                        >
+                          {up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownLeft className="w-3 h-3" />}
+                          {text}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div className="text-xs text-muted-foreground mt-2">
-                  Last 30 days
+                  {periodLabel(selectedPeriod)}
                 </div>
               </CardContent>
             </Card>
@@ -185,9 +246,17 @@ export default function DashboardPage() {
                 <div className="text-2xl font-bold text-foreground mb-2">
                   {formatNumber(totalTransactions)}
                 </div>
-                <div className="flex items-center gap-1 text-xs text-green-600">
-                  <ArrowUpRight className="w-3 h-3" />
-                  <span>8.2% from last month</span>
+                <div className="flex items-center gap-1 text-xs">
+                  {(() => {
+                    const { text, up } = fmtPct(comp?.transactions_pct_change ?? undefined);
+                    if (up === null) return <span className="text-muted-foreground">{text}</span>;
+                    return (
+                      <span className={`flex items-center gap-1 ${up ? 'text-green-600' : 'text-red-600'}`}>
+                        {up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownLeft className="w-3 h-3" />}
+                        {text}
+                      </span>
+                    );
+                  })()}
                 </div>
               </CardContent>
             </Card>
@@ -203,9 +272,17 @@ export default function DashboardPage() {
                 <div className="text-2xl font-bold text-foreground mb-2">
                   {successRate.toFixed(1)}%
                 </div>
-                <div className="flex items-center gap-1 text-xs text-green-600">
-                  <ArrowUpRight className="w-3 h-3" />
-                  <span>0.8% from last month</span>
+                <div className="flex items-center gap-1 text-xs">
+                  {(() => {
+                    const { text, up } = fmtPts(comp?.success_rate_pts_change ?? undefined);
+                    if (up === null) return <span className="text-muted-foreground">{text}</span>;
+                    return (
+                      <span className={`flex items-center gap-1 ${up ? 'text-green-600' : 'text-red-600'}`}>
+                        {up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownLeft className="w-3 h-3" />}
+                        {text}
+                      </span>
+                    );
+                  })()}
                 </div>
               </CardContent>
             </Card>
@@ -221,9 +298,17 @@ export default function DashboardPage() {
                 <div className="text-2xl font-bold text-foreground mb-2">
                   {formatNumber(activeCustomers)}
                 </div>
-                <div className="flex items-center gap-1 text-xs text-green-600">
-                  <ArrowUpRight className="w-3 h-3" />
-                  <span>5.3% from last month</span>
+                <div className="flex items-center gap-1 text-xs">
+                  {(() => {
+                    const { text, up } = fmtPct(comp?.customers_pct_change ?? undefined);
+                    if (up === null) return <span className="text-muted-foreground">{text}</span>;
+                    return (
+                      <span className={`flex items-center gap-1 ${up ? 'text-green-600' : 'text-red-600'}`}>
+                        {up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownLeft className="w-3 h-3" />}
+                        {text}
+                      </span>
+                    );
+                  })()}
                 </div>
               </CardContent>
             </Card>
@@ -275,7 +360,20 @@ export default function DashboardPage() {
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
-                    <Pie data={transactionData} cx="50%" cy="50%" labelLine={false} label={({ name, value }) => `${name}: ${value}%`} outerRadius={80} fill="#8884d8" dataKey="value">
+                    <Pie
+                      data={transactionData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, value }) => {
+                        const n = Number(value);
+                        const pct = pieTotal > 0 ? Math.round((n / pieTotal) * 100) : 0;
+                        return `${name}: ${pct}%`;
+                      }}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
                       {transactionData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
@@ -341,27 +439,6 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
-
-          {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <Card className="border-border">
-              <CardHeader>
-                <CardTitle>Revenue Trend</CardTitle>
-                <CardDescription>Daily revenue over selected period</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={revenueData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="amount" stroke="#0066ff" strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
         </div>
     </div>
   );

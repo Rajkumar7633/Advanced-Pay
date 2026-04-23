@@ -107,7 +107,7 @@ func main() {
 	disputeRepo := repository.NewDisputeRepository(db)
 
 	// Initialize handlers
-	paymentHandler := handlers.NewPaymentHandler(paymentService, webhookService, paymentLinkRepo, log)
+	paymentHandler := handlers.NewPaymentHandler(paymentService, webhookService, paymentLinkRepo, merchantRepo, log)
 	merchantHandler := handlers.NewMerchantHandler(merchantService, reportingService, log)
 	reportingHandler := handlers.NewReportingHandler(reportingService, log)
 	authHandler := handlers.NewAuthHandler(authService, log)
@@ -120,7 +120,7 @@ func main() {
 	vaultHandler := handlers.NewVaultHandler(vaultService, log)
 	websocketHandler := handlers.NewWebsocketHandler(pulseHub, log)
 	
-	adminService := service.NewAdminService(adminRepo, log)
+	adminService := service.NewAdminService(adminRepo, authService, log)
 	adminHandler := handlers.NewAdminHandler(adminService, cacheClient, log, cfg.JWT.Secret, cfg.Server.AdminEmail, cfg.Server.AdminPassword)
 	subscriptionHandler := handlers.NewSubscriptionHandler(subscriptionService, log)
 	disputeHandler := handlers.NewDisputeHandler(disputeRepo, log)
@@ -199,6 +199,7 @@ func main() {
 		// Create checkout session requires merchant auth
 		publicAuth := public.Group("")
 		publicAuth.Use(middleware.JWTAuth(cfg.JWT.Secret, cacheClient))
+		publicAuth.Use(middleware.MerchantMustBeActive(merchantRepo))
 		{
 			publicAuth.POST("/checkout/session", checkoutHandler.CreateSession)
 		}
@@ -253,6 +254,7 @@ func main() {
 		{
 			admin.GET("/metrics", adminHandler.GetSystemMetrics)
 			admin.GET("/merchants", adminHandler.GetAllMerchants)
+			admin.GET("/merchants/:id", adminHandler.GetMerchantDetail)
 			admin.PUT("/merchants/:id/status", adminHandler.UpdateMerchantStatus)
 			admin.GET("/disputes", adminHandler.GetAllDisputes)
 			admin.PUT("/disputes/:id/resolve", adminHandler.ResolveDispute)
@@ -278,6 +280,7 @@ func main() {
 		// Protected routes (require authentication)
 		authenticated := v1.Group("")
 		authenticated.Use(middleware.JWTAuth(cfg.JWT.Secret, cacheClient))
+		authenticated.Use(middleware.MerchantMustBeActive(merchantRepo))
 		authenticated.Use(middleware.RateLimit(cacheClient, 1000, time.Minute, log)) // 1000 req/min for authenticated
 		{
 			// Auth protected routes
@@ -334,6 +337,10 @@ func main() {
 				webhooks.GET("", paymentHandler.ListWebhooks)
 				webhooks.DELETE("/:id", middleware.RBAC("owner", "admin", "developer"), paymentHandler.DeleteWebhook)
 				webhooks.POST("/:id/test", middleware.RBAC("owner", "admin", "developer"), paymentHandler.TestWebhook)
+				
+				// Webhook Delivery Logs Simulator
+				webhooks.GET("/events", paymentHandler.ListWebhookEvents)
+				webhooks.POST("/events/:id/retry", middleware.RBAC("owner", "admin", "developer"), paymentHandler.RetryWebhookEvent)
 			}
 
 			// Payment Links routes
@@ -415,6 +422,7 @@ func main() {
 		// Protected routes
 		authenticated := api.Group("")
 		authenticated.Use(middleware.JWTAuth(cfg.JWT.Secret, cacheClient))
+		authenticated.Use(middleware.MerchantMustBeActive(merchantRepo))
 		{
 			// Auth protected routes
 			authProtected := authenticated.Group("/auth")
@@ -462,6 +470,12 @@ func main() {
 				paymentLinks.GET("/:id", paymentHandler.GetPaymentLink)
 				paymentLinks.DELETE("/:id", paymentHandler.DeletePaymentLink)
 			}
+
+			authenticated.GET("/subscriptions", subscriptionHandler.ListSubscriptions)
+			authenticated.POST("/subscriptions", subscriptionHandler.CreateSubscription)
+			authenticated.DELETE("/subscriptions/:id", subscriptionHandler.CancelSubscription)
+			authenticated.GET("/plans", subscriptionHandler.ListPlans)
+			authenticated.POST("/plans", subscriptionHandler.CreatePlan)
 
 			// Settlement routes
 			settlements := authenticated.Group("/settlements")

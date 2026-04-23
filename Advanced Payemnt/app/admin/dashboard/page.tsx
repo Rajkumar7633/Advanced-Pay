@@ -10,7 +10,7 @@ import {
   BarChart3, Users, DollarSign, ShieldAlert, ArrowUpRight, 
   Settings, Clock, CheckCircle2, Shield, AlertTriangle, XCircle, Activity,
   ServerCrash, RefreshCw, LogOut, Scale, TrendingUp, Info, CheckCircle,
-  Trophy, Server, Cpu, Globe, Zap
+  Trophy, Server, Cpu, Globe, Zap, Eye
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line,
@@ -25,6 +25,8 @@ import {
   useAdminSettlements, useAdminApproveSettlement, useAdminRoutingStats
 } from '@/hooks/useAdmin';
 import { toast } from 'sonner';
+import { AdminNav } from '@/components/admin/admin-nav';
+import { MerchantDetailSheet } from '@/components/admin/merchant-detail-sheet';
 
 const REASON_LABELS: Record<string, string> = {
   fraudulent: 'Fraudulent',
@@ -38,6 +40,7 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const [activeTab, setActiveTab]   = useState('overview');
   const [resolveModal, setResolveModal] = useState<{ id: string; merchant: string; amount: string } | null>(null);
+  const [merchantDetailId, setMerchantDetailId] = useState<string | null>(null);
 
   // Auth guard — redirect to login if not authenticated
   useEffect(() => {
@@ -147,6 +150,7 @@ export default function AdminDashboardPage() {
 
   const handleLogout = () => {
     sessionStorage.removeItem('admin_auth');
+    sessionStorage.removeItem('admin_token');
     router.push('/admin/login');
   };
 
@@ -180,7 +184,7 @@ export default function AdminDashboardPage() {
       
       {/* ── Top Navigation Bar ── */}
       <header className="border-b border-border/40 bg-background/60 backdrop-blur-3xl sticky top-0 z-40 transition-all shadow-sm">
-        <div className="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between">
+        <div className="max-w-[1600px] mx-auto px-6 py-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 border border-white/10">
               <Shield className="w-5 h-5 text-white" />
@@ -190,6 +194,8 @@ export default function AdminDashboardPage() {
               <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground">God-Mode Access</p>
             </div>
           </div>
+
+          <AdminNav className="order-last w-full justify-center lg:order-none lg:w-auto" />
 
           <div className="flex items-center gap-3">
             {openDisputes > 0 && (
@@ -256,6 +262,7 @@ export default function AdminDashboardPage() {
               { value: 'routing',       label: 'AI Routing',   icon: Zap, path: null },
               { value: 'disputes',      label: 'Disputes',     icon: Scale, path: null },
               { value: 'risk',          label: 'Risk Center',  icon: ShieldAlert, path: '/admin/risk' },
+              { value: 'operations',    label: 'Operations',   icon: CheckCircle, path: '/admin/operations' },
               { value: 'merchants',     label: 'Merchants',    icon: Users, path: null },
               { value: 'system',        label: 'System',       icon: Settings, path: null },
             ].map(({ value, label, icon: Icon, path }) => (
@@ -473,7 +480,7 @@ export default function AdminDashboardPage() {
                   </thead>
                   <tbody className="divide-y divide-border/40">
                     {merchants.map(m => (
-                      <tr key={m.id} className="hover:bg-muted/20 transition-colors group">
+                      <tr key={m.id} className="transition-colors hover:bg-muted/20">
                         <td className="py-4 px-5">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
@@ -488,34 +495,104 @@ export default function AdminDashboardPage() {
                         <td className="py-4 px-5 text-muted-foreground">{formatDate(m.date)}</td>
                         <td className="py-4 px-5 font-bold">{formatCurrency(parseFloat(m.volume || '0'))}</td>
                         <td className="py-4 px-5">
-                          <Badge className={`text-xs font-bold uppercase ${
-                            m.status === 'approved'  ? 'bg-green-100 text-green-700 border-green-300' :
-                            m.status === 'pending'   ? 'bg-amber-100 text-amber-700 border-amber-300' :
-                            'bg-red-100 text-red-700 border-red-300'
-                          }`}>{m.status}</Badge>
+                          <Badge
+                            variant="outline"
+                            className={`text-xs font-semibold capitalize ${
+                              m.status === 'approved' || m.status === 'active'
+                                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+                                : m.status === 'pending'
+                                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200'
+                                  : m.status === 'suspended'
+                                    ? 'border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-300'
+                                    : 'border-border bg-muted text-muted-foreground'
+                            }`}
+                          >
+                            {m.status}
+                          </Badge>
                         </td>
                         <td className="py-4 px-5">
-                          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {m.status === 'pending' && <>
-                              <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 text-xs"
-                                onClick={() => { merchantMutation.mutate({ merchantId: m.id, status: 'approved' }); toast.success(`${m.name} approved`); }}>
-                                ✓ Approve
-                              </Button>
-                              <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50"
-                                onClick={() => { merchantMutation.mutate({ merchantId: m.id, status: 'suspended' }); toast.error(`${m.name} rejected`); }}>
-                                Reject
-                              </Button>
-                            </>}
-                            {m.status === 'approved' && (
-                              <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50"
-                                onClick={() => { merchantMutation.mutate({ merchantId: m.id, status: 'suspended' }); toast.success(`${m.name} suspended`); }}>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="h-8 gap-1 text-xs"
+                              onClick={() => setMerchantDetailId(m.id)}
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              Details
+                            </Button>
+                            {m.status === 'pending' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  className="h-8 bg-emerald-600 text-xs hover:bg-emerald-700"
+                                  onClick={async () => {
+                                    try {
+                                      await merchantMutation.mutateAsync({ merchantId: m.id, status: 'approved' });
+                                      toast.success(`${m.name} approved`);
+                                      refetchMerchants();
+                                      refetchMetrics();
+                                    } catch {
+                                      toast.error('Approve failed');
+                                    }
+                                  }}
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 border-destructive/40 text-xs text-destructive"
+                                  onClick={async () => {
+                                    try {
+                                      await merchantMutation.mutateAsync({ merchantId: m.id, status: 'suspended' });
+                                      toast.message(`${m.name} on hold`, { description: 'Suspended until KYC cleared.' });
+                                      refetchMerchants();
+                                      refetchMetrics();
+                                    } catch {
+                                      toast.error('Update failed');
+                                    }
+                                  }}
+                                >
+                                  Hold
+                                </Button>
+                              </>
+                            )}
+                            {(m.status === 'active' || m.status === 'approved') && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 border-destructive/40 text-xs text-destructive"
+                                onClick={async () => {
+                                  try {
+                                    await merchantMutation.mutateAsync({ merchantId: m.id, status: 'suspended' });
+                                    toast.success(`${m.name} suspended`);
+                                    refetchMerchants();
+                                    refetchMetrics();
+                                  } catch {
+                                    toast.error('Suspend failed');
+                                  }
+                                }}
+                              >
                                 Suspend
                               </Button>
                             )}
                             {m.status === 'suspended' && (
-                              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 h-7 text-xs"
-                                onClick={() => { merchantMutation.mutate({ merchantId: m.id, status: 'approved' }); toast.success(`${m.name} reinstated`); }}>
-                                Reinstate
+                              <Button
+                                size="sm"
+                                className="h-8 bg-primary text-xs"
+                                onClick={async () => {
+                                  try {
+                                    await merchantMutation.mutateAsync({ merchantId: m.id, status: 'active' });
+                                    toast.success(`${m.name} reactivated`);
+                                    refetchMerchants();
+                                    refetchMetrics();
+                                  } catch {
+                                    toast.error('Reactivate failed');
+                                  }
+                                }}
+                              >
+                                Reactivate
                               </Button>
                             )}
                           </div>
@@ -890,6 +967,18 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       )}
+
+      <MerchantDetailSheet
+        merchantId={merchantDetailId}
+        open={merchantDetailId !== null}
+        onOpenChange={(o) => {
+          if (!o) setMerchantDetailId(null);
+        }}
+        onStatusApplied={() => {
+          refetchMerchants();
+          refetchMetrics();
+        }}
+      />
     </div>
   );
 }

@@ -57,6 +57,7 @@ func (h *MerchantHandler) UpdateProfile(c *gin.Context) {
 			WebhookSecret     string                 `json:"webhook_secret"`
 			PaymentMethods    []string               `json:"payment_methods"`
 			FraudThreshold    int                    `json:"fraud_threshold"`
+			Theme             *models.ThemeSettings  `json:"theme"`
 			Preferences       map[string]interface{} `json:"preferences"`
 		} `json:"settings"`
 	}
@@ -109,6 +110,9 @@ func (h *MerchantHandler) UpdateProfile(c *gin.Context) {
 		merchant.Settings.WebhookSecret = req.Settings.WebhookSecret
 		merchant.Settings.PaymentMethods = req.Settings.PaymentMethods
 		merchant.Settings.FraudThreshold = req.Settings.FraudThreshold
+		if req.Settings.Theme != nil {
+			merchant.Settings.Theme = req.Settings.Theme
+		}
 		merchant.Settings.Preferences = req.Settings.Preferences
 	}
 

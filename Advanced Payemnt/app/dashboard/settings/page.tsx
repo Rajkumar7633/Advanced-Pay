@@ -193,6 +193,17 @@ export default function SettingsPage() {
             <p className="text-muted-foreground">Manage your account and API configurations</p>
           </div>
 
+          <Link
+            href="/dashboard/payments"
+            className="mb-6 block rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm transition-colors hover:bg-primary/10"
+          >
+            <span className="font-semibold text-foreground">Payments hub</span>
+            <span className="text-muted-foreground">
+              {' '}
+              — your UPI, cards, wallet, and cross-border rails; checkout links in one place →
+            </span>
+          </Link>
+
           <div className="grid gap-4 sm:grid-cols-2 mb-8">
             <Link href="/dashboard/settings/account" className="block">
               <Card className="border-border hover:border-primary/50 transition-colors cursor-pointer h-full">
@@ -215,6 +226,14 @@ export default function SettingsPage() {
                 <CardHeader>
                   <CardTitle className="text-base">Payment Methods</CardTitle>
                   <CardDescription>Enable/disable payment methods</CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+            <Link href="/dashboard/branding" className="block">
+              <Card className="border-indigo-500/20 bg-indigo-500/5 hover:border-indigo-500/50 transition-colors cursor-pointer h-full">
+                <CardHeader>
+                  <CardTitle className="text-base text-indigo-500 flex items-center gap-2">Theme Engine</CardTitle>
+                  <CardDescription>White-label your hosted checkout</CardDescription>
                 </CardHeader>
               </Card>
             </Link>

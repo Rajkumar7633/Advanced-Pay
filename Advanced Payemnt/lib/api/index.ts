@@ -5,6 +5,9 @@
 
 import api from '../api-client';
 
+/** Raw axios instance (same as default export from `@/lib/api-client`) for legacy imports. */
+export { api };
+
 // Types
 export interface CreatePaymentRequest {
   amount: number;
@@ -107,6 +110,40 @@ export const merchantsApi = {
     api.put(`/api-keys/${id}`, { name: `Regenerated Key ${new Date().toLocaleDateString()}` }),
   revokeApiKey: (id: string) =>
     api.delete(`/api-keys/${id}`),
+};
+
+export type SubscriptionPlanDTO = {
+  id: string;
+  name: string;
+  description?: string;
+  amount: number | string;
+  currency: string;
+  interval_type: string;
+  interval_count: number;
+  is_active?: boolean;
+};
+
+export type SubscriptionDTO = {
+  id: string;
+  plan_id: string;
+  customer_email: string;
+  customer_phone?: string;
+  status: string;
+  current_period_start: string;
+  current_period_end: string;
+  next_billing_date?: string | null;
+  canceled_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// Subscriptions & recurring plans (merchant JWT)
+export const subscriptionsApi = {
+  list: () => api.get<{ data: SubscriptionDTO[] }>('/subscriptions'),
+  listPlans: () => api.get<{ data: SubscriptionPlanDTO[] }>('/plans'),
+  create: (body: { plan_id: string; customer_email: string; customer_phone?: string }) =>
+    api.post<{ data: unknown; auth_url?: string; message?: string }>('/subscriptions', body),
+  cancel: (id: string) => api.delete(`/subscriptions/${id}`),
 };
 
 // Webhook APIs

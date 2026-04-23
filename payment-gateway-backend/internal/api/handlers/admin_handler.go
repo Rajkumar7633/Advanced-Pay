@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -93,8 +95,29 @@ func (h *AdminHandler) GetAllMerchants(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": merchants})
 }
 
+func (h *AdminHandler) GetMerchantDetail(c *gin.Context) {
+	merchantID := c.Param("id")
+	if merchantID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "merchant id required"})
+		return
+	}
+
+	detail, err := h.adminService.GetMerchantDetail(c.Request.Context(), merchantID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "merchant not found"})
+			return
+		}
+		h.logger.Error("Failed to get merchant detail", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch merchant"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": detail})
+}
+
 type UpdateMerchantStatusReq struct {
-	Status string `json:"status" binding:"required,oneof=pending approved suspended"`
+	Status string `json:"status" binding:"required,oneof=pending approved suspended active"`
 }
 
 func (h *AdminHandler) UpdateMerchantStatus(c *gin.Context) {

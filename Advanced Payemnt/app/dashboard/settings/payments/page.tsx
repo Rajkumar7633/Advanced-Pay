@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import Link from 'next/link';
-import { ArrowLeft, CreditCard, Smartphone, Building2 } from 'lucide-react';
+import { ArrowLeft, CreditCard, Smartphone, Building2, Globe, Wallet, Sparkles } from 'lucide-react';
 import { merchantsApi } from '@/lib/api';
 
 export default function PaymentsSettingsPage() {
@@ -89,8 +89,17 @@ export default function PaymentsSettingsPage() {
         <ArrowLeft className="w-4 h-4" />
         Back to Settings
       </Link>
-      <h1 className="text-3xl font-bold text-foreground mb-2">Payment Methods</h1>
-      <p className="text-muted-foreground mb-8">Enable or disable payment methods for your checkout</p>
+      <h1 className="text-3xl font-bold text-foreground mb-2">Your payment methods</h1>
+      <p className="text-muted-foreground mb-2">
+        These are <strong className="text-foreground">Advanced Pay</strong> rails only — no third-party checkout or
+        wallet brand. Toggles sync to your merchant profile and control what appears in hosted / advanced checkout.
+      </p>
+      <p className="text-sm text-muted-foreground mb-8">
+        <Link href="/dashboard/payments" className="font-medium text-primary underline-offset-4 hover:underline">
+          Open payments hub
+        </Link>{' '}
+        for test links and cross-border flows.
+      </p>
 
       <div className="space-y-4">
         <Card className="border-border">
@@ -98,8 +107,8 @@ export default function PaymentsSettingsPage() {
             <div className="flex items-center gap-3">
               <CreditCard className="w-8 h-8 text-primary" />
               <div>
-                <p className="font-medium">Cards (Visa, Mastercard, RuPay)</p>
-                <p className="text-sm text-muted-foreground">Credit and debit cards</p>
+                <p className="font-medium">Cards</p>
+                <p className="text-sm text-muted-foreground">Debit / credit on your gateway (your rules, your BIN routing).</p>
               </div>
             </div>
             <Switch 
@@ -114,7 +123,7 @@ export default function PaymentsSettingsPage() {
               <Smartphone className="w-8 h-8 text-primary" />
               <div>
                 <p className="font-medium">UPI</p>
-                <p className="text-sm text-muted-foreground">PhonePe, GPay, BHIM, and more</p>
+                <p className="text-sm text-muted-foreground">Collect, intent, QR — your UPI rail, your merchant VPA.</p>
               </div>
             </div>
             <Switch 
@@ -128,13 +137,67 @@ export default function PaymentsSettingsPage() {
             <div className="flex items-center gap-3">
               <Building2 className="w-8 h-8 text-primary" />
               <div>
-                <p className="font-medium">Net Banking</p>
-                <p className="text-sm text-muted-foreground">Direct bank transfer</p>
+                <p className="font-medium">Net banking</p>
+                <p className="text-sm text-muted-foreground">Bank redirect flows you operate end-to-end.</p>
               </div>
             </div>
             <Switch 
               checked={hasMethod('netbanking')} 
               onCheckedChange={(c) => handleMethodToggle('netbanking', c)} 
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="border-border border-emerald-500/20">
+          <CardContent className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+              <Wallet className="w-8 h-8 text-emerald-600" />
+              <div>
+                <p className="font-medium">Platform wallet</p>
+                <p className="text-sm text-muted-foreground">
+                  Stored balance or internal wallet — Advanced Pay branded, not an external app.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={hasMethod('wallet')}
+              onCheckedChange={(c) => handleMethodToggle('wallet', c)}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="border-border border-blue-500/20">
+          <CardContent className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+              <Globe className="w-8 h-8 text-blue-600" />
+              <div>
+                <p className="font-medium">Cross-border rail</p>
+                <p className="text-sm text-muted-foreground">
+                  International card / wallet presentation in checkout — still your stack and settlement logic.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={hasMethod('international')}
+              onCheckedChange={(c) => handleMethodToggle('international', c)}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="border-border">
+          <CardContent className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-8 h-8 text-violet-600" />
+              <div>
+                <p className="font-medium">Device quick-pay</p>
+                <p className="text-sm text-muted-foreground">
+                  One-tap using tokens you issue (optional) — no third-party wallet button required.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={hasMethod('device_quick_pay')}
+              onCheckedChange={(c) => handleMethodToggle('device_quick_pay', c)}
             />
           </CardContent>
         </Card>

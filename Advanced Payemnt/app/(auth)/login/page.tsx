@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +21,13 @@ export default function LoginPage() {
   
   const [requires2FA, setRequires2FA] = useState(false);
   const [merchantId, setMerchantId] = useState('');
+  const [inactiveNotice, setInactiveNotice] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const reason = new URLSearchParams(window.location.search).get('reason');
+    if (reason === 'account_inactive') setInactiveNotice(true);
+  }, []);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +77,12 @@ export default function LoginPage() {
         <CardDescription>Sign in to your merchant dashboard</CardDescription>
       </CardHeader>
       <CardContent>
+        {inactiveNotice && (
+          <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm">
+            This merchant account is suspended or not yet approved. An administrator must set your status to active
+            or approved before you can use the dashboard.
+          </div>
+        )}
         {!requires2FA ? (
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             {error && (

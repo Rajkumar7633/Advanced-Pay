@@ -117,7 +117,7 @@ export function OneTapCheckout({ onPay, savedMethod, loading }: OneTapCheckoutPr
           <p className="text-sm text-muted-foreground">Save card for one-tap on next purchase</p>
         )}
         <Button
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold"
           onClick={handleStartScan}
           disabled={loading}
         >
@@ -126,15 +126,15 @@ export function OneTapCheckout({ onPay, savedMethod, loading }: OneTapCheckoutPr
       </div>
 
       {showScanner && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-sm w-full flex flex-col items-center shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-bold text-white">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-md">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 max-w-sm w-full flex flex-col items-center shadow-[0_0_50px_rgba(37,99,235,0.2)] space-y-6 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-bold text-white tracking-widest uppercase">
               {scanStatus === 'verified' ? 'Identity Verified!' : 'Fingerprint Scan'}
             </h3>
             
             <div 
-              className={`relative w-32 h-32 flex items-center justify-center bg-slate-800 rounded-full border-2 overflow-hidden shadow-inner cursor-pointer select-none touch-none transition-colors duration-200 ${
-                isPressing && scanStatus !== 'verified' ? 'border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)]' : 'border-slate-700'
+              className={`relative w-36 h-36 flex items-center justify-center bg-slate-800 rounded-full border-2 overflow-hidden shadow-inner cursor-pointer select-none touch-none transition-colors duration-200 ${
+                isPressing && scanStatus !== 'verified' ? 'border-blue-500 shadow-[0_0_40px_rgba(59,130,246,0.4)]' : 'border-slate-700'
               }`}
               onPointerDown={() => scanStatus !== 'verified' && setIsPressing(true)}
               onPointerUp={() => scanStatus !== 'verified' && setIsPressing(false)}
@@ -144,13 +144,13 @@ export function OneTapCheckout({ onPay, savedMethod, loading }: OneTapCheckoutPr
               onContextMenu={(e) => e.preventDefault()}
             >
               {scanStatus === 'verified' ? (
-                <CheckCircle2 className="w-16 h-16 text-green-500 animate-in zoom-in duration-300" />
+                <CheckCircle2 className="w-20 h-20 text-green-500 animate-in zoom-in duration-300" />
               ) : (
                 <>
-                  <Fingerprint className={`w-16 h-16 transition-colors duration-200 ${isPressing ? 'text-blue-500/80 scale-105' : 'text-blue-500/30'}`} />
+                  <Fingerprint className={`w-20 h-20 transition-colors duration-200 ${isPressing ? 'text-blue-500/90 scale-105' : 'text-slate-500'}`} />
                   {/* Neon Scanner Bar */}
                   <div 
-                    className="absolute bottom-0 left-0 right-0 bg-blue-500/20 border-t-4 border-blue-400 shadow-[0_-4px_15px_rgba(59,130,246,0.6)]"
+                    className="absolute bottom-0 left-0 right-0 bg-blue-500/20 border-t-4 border-blue-400 shadow-[0_-4px_15px_rgba(59,130,246,0.8)] pointer-events-none"
                     style={{ 
                       height: `${scanProgress}%`,
                       transition: isPressing ? 'height 50ms linear' : 'height 250ms ease-out'
@@ -160,14 +160,14 @@ export function OneTapCheckout({ onPay, savedMethod, loading }: OneTapCheckoutPr
               )}
             </div>
 
-            <p className="text-slate-400 text-sm text-center">
+            <p className="text-slate-400 text-sm text-center font-mono">
               {scanStatus === 'verified' 
-                ? 'Processing secure one-tap payment...' 
+                ? 'Processing secure one-tap checkout...' 
                 : 'Press and hold your finger on the sensor to securely confirm this transaction.'}
             </p>
             
             {scanStatus !== 'verified' && (
-              <Button variant="ghost" className="text-slate-500 hover:text-white" onClick={() => setShowScanner(false)}>
+              <Button variant="ghost" className="text-slate-500 hover:text-white mt-2" onClick={() => setShowScanner(false)}>
                 Cancel
               </Button>
             )}

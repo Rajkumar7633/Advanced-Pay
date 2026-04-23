@@ -83,6 +83,13 @@ type Merchant struct {
 	UpdatedAt         time.Time        `json:"updated_at" db:"updated_at"`
 }
 
+type ThemeSettings struct {
+	PrimaryColor    string `json:"primary_color"`
+	BorderRadius    string `json:"border_radius"`
+	BackgroundStyle string `json:"background_style"`
+	LogoURL         string `json:"logo_url"`
+}
+
 // MerchantSettings holds merchant-specific settings
 type MerchantSettings struct {
 	SettlementCycle   string                 `json:"settlement_cycle"`
@@ -91,6 +98,7 @@ type MerchantSettings struct {
 	WebhookSecret     string                 `json:"webhook_secret"`
 	PaymentMethods    []string               `json:"payment_methods"`
 	FraudThreshold    int                    `json:"fraud_threshold"`
+	Theme             *ThemeSettings         `json:"theme,omitempty"`
 	Preferences       map[string]interface{} `json:"preferences"`
 }
 

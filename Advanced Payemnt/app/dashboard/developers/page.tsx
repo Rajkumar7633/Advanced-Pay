@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Key, Terminal, Code, Activity, Webhook, EyeOff, Eye, RefreshCw, Copy, Plus } from 'lucide-react';
+import { Key, Terminal, Code, Activity, Webhook, EyeOff, Eye, RefreshCw, Copy, Plus, Server, CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/lib/store/auth';
 import { api } from '@/lib/api';
@@ -25,10 +25,22 @@ interface WebhookEndpoint {
   secret: string;
 }
 
+interface WebhookDeliveryEvent {
+  id: string;
+  event_type: string;
+  transaction_id?: string;
+  payload: any;
+  status: string;
+  attempts: number;
+  created_at: string;
+}
+
 export default function DeveloperWorkstation() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
+  const [webhookEvents, setWebhookEvents] = useState<WebhookDeliveryEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
   const [showSecret, setShowSecret] = useState<Record<string, boolean>>({});
   
   const { token } = useAuthStore();
@@ -36,12 +48,14 @@ export default function DeveloperWorkstation() {
   const fetchDeveloperData = async () => {
     try {
       setLoading(true);
-      const [keysRes, hooksRes] = await Promise.all([
+      const [keysRes, hooksRes, eventsRes] = await Promise.all([
         api.get('/api-keys'),
-        api.get('/webhooks')
+        api.get('/webhooks'),
+        api.get('/webhooks/events?limit=25')
       ]);
       setKeys(keysRes.data || []);
-      setWebhooks(hooksRes.data || []);
+      setWebhooks(hooksRes.data?.data || hooksRes.data || []);
+      setWebhookEvents(eventsRes.data?.data || eventsRes.data || []);
     } catch (e) {
       toast.error('Failed to load SDK resources');
     } finally {
@@ -73,6 +87,16 @@ export default function DeveloperWorkstation() {
 
   const toggleSecret = (id: string) => {
     setShowSecret(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handleRetryWebhook = async (id: string) => {
+    try {
+      await api.post(`/webhooks/events/${id}/retry`);
+      toast.success('Event re-queued for delivery loop.');
+      fetchDeveloperData();
+    } catch {
+      toast.error('Failed to trigger retry');
+    }
   };
 
   if (loading) {
@@ -193,6 +217,87 @@ export default function DeveloperWorkstation() {
         </Card>
 
       </div>
+
+      {/* REAL-TIME DELIVERY LOGS */}
+      <div className="mt-8">
+        <Card className="border-border/60 shadow-xl overflow-hidden bg-slate-950 text-slate-300">
+           <CardHeader className="border-b border-white/5 bg-slate-900/50 flex flex-row items-center justify-between pb-4">
+               <div>
+                   <CardTitle className="text-xl text-white flex items-center gap-2"><Server className="w-5 h-5 text-green-400" /> Webhook Delivery Simulator</CardTitle>
+                   <CardDescription className="text-slate-400">Real-time asynchronous payload trace logs. Click to inspect JSON payloads.</CardDescription>
+               </div>
+               <Button onClick={fetchDeveloperData} variant="outline" size="sm" className="bg-transparent border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"><RefreshCw className="w-4 h-4 mr-2"/> Refresh Engine</Button>
+           </CardHeader>
+           <CardContent className="p-0">
+               {webhookEvents.length === 0 ? (
+                   <div className="p-12 text-center text-slate-500 font-mono text-sm">
+                       No webhook dispatches captured yet. Trigger an API test.
+                   </div>
+               ) : (
+                   <div className="divide-y divide-white/5">
+                       {webhookEvents.map(event => (
+                           <div key={event.id} className="flex flex-col group">
+                               {/* Row Header */}
+                               <div 
+                                 className="flex items-center justify-between p-4 hover:bg-slate-900/80 cursor-pointer transition-colors"
+                                 onClick={() => setExpandedEvent(expandedEvent === event.id ? null : event.id)}
+                               >
+                                   <div className="flex items-center gap-4 w-1/3">
+                                       {event.status === 'delivered' ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : event.status === 'failed' ? <XCircle className="w-5 h-5 text-red-500" /> : <RefreshCw className="w-5 h-5 text-yellow-500 animate-spin" />}
+                                       <span className="font-mono text-sm text-slate-200">{event.event_type}</span>
+                                   </div>
+                                   <div className="w-1/3 text-center">
+                                       <Badge variant="outline" className={`bg-transparent font-mono text-[10px] ${event.status === 'delivered' ? 'text-green-400 border-green-400/30' : event.status === 'failed' ? 'text-red-400 border-red-400/30' : 'text-yellow-400 border-yellow-400/30'}`}>
+                                           {event.status.toUpperCase()}
+                                       </Badge>
+                                   </div>
+                                   <div className="w-1/3 text-right text-xs font-mono text-slate-500 flex justify-end items-center gap-4">
+                                       {new Date(event.created_at).toLocaleString()}
+                                       <Code className="w-4 h-4" />
+                                   </div>
+                               </div>
+
+                               {/* Expanded JSON Inspector */}
+                               {expandedEvent === event.id && (
+                                   <div className="bg-[#0c1017] p-6 border-t border-white/5 relative shadow-inner">
+                                       <div className="absolute top-4 right-4 flex items-center gap-2">
+                                           <Button size="sm" variant="outline" className="h-8 bg-slate-900 border-slate-700 text-slate-300 hover:text-white" onClick={() => handleCopy(JSON.stringify(event.payload, null, 2))}>
+                                              <Copy className="w-3.5 h-3.5 mr-2" /> Copy Payload
+                                           </Button>
+                                           <Button size="sm" onClick={() => handleRetryWebhook(event.id)} className="h-8 bg-indigo-600 hover:bg-indigo-700 text-white border-0">
+                                              <RotateCcw className="w-3.5 h-3.5 mr-2" /> Retry Delivery
+                                           </Button>
+                                       </div>
+                                       
+                                       <div className="grid grid-cols-2 gap-8 w-[calc(100%-250px)]">
+                                          <div>
+                                              <p className="text-xs uppercase tracking-widest text-slate-500 mb-2 font-bold">Event Trajectory</p>
+                                              <div className="space-y-1 font-mono text-xs text-slate-400">
+                                                  <p>ID: <span className="text-blue-400">{event.id}</span></p>
+                                                  <p>Attempts: <span className="text-orange-400">{event.attempts}</span> / 5</p>
+                                                  {event.transaction_id && <p>Transaction Bound: <span className="text-purple-400">{event.transaction_id}</span></p>}
+                                              </div>
+                                          </div>
+                                       </div>
+                                       
+                                       <div className="mt-4">
+                                          <p className="text-xs uppercase tracking-widest text-slate-500 mb-2 font-bold">Raw JSON Payload</p>
+                                          <div className="bg-[#05070a] border border-white/5 rounded-xl p-4 overflow-x-auto">
+                                              <pre className="text-[11px] font-mono leading-relaxed text-emerald-400">
+                                                  {JSON.stringify(event.payload, null, 2)}
+                                              </pre>
+                                          </div>
+                                       </div>
+                                   </div>
+                               )}
+                           </div>
+                       ))}
+                   </div>
+               )}
+           </CardContent>
+        </Card>
+      </div>
+
     </div>
   );
 }

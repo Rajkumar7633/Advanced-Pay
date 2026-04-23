@@ -40,6 +40,14 @@ type RecentTransaction struct {
 	RoutingDecision json.RawMessage `json:"routing_decision"` // Parse into raw json
 }
 
+// DashboardComparison is current window vs the immediately preceding window of equal length.
+type DashboardComparison struct {
+	RevenuePct        *float64 `json:"revenue_pct_change,omitempty"`
+	TransactionsPct   *float64 `json:"transactions_pct_change,omitempty"`
+	SuccessRatePts    *float64 `json:"success_rate_pts_change,omitempty"`
+	CustomersPct      *float64 `json:"customers_pct_change,omitempty"`
+}
+
 type DashboardOverview struct {
 	TotalRevenue       decimal.Decimal      `json:"total_revenue"`
 	TotalTransactions  int64                `json:"total_transactions"`
@@ -48,6 +56,7 @@ type DashboardOverview struct {
 	RevenueTrend       []RevenuePoint       `json:"revenue_trend"`
 	PaymentMethodSplit []PaymentMethodPoint `json:"payment_method_breakdown"`
 	RecentTransactions []RecentTransaction  `json:"recent_transactions"`
+	Comparison         *DashboardComparison `json:"comparison,omitempty"`
 }
 
 type AnalyticsResponse struct {
@@ -69,6 +78,69 @@ type MerchantStats struct {
 
 func NewReportingService(db *sqlx.DB) *ReportingService {
 	return &ReportingService{db: db}
+}
+
+type windowAgg struct {
+	TotalTx         int64
+	SuccessTx       int64
+	Revenue         decimal.Decimal
+	ActiveCustomers int64
+}
+
+func (s *ReportingService) aggregateWindow(ctx context.Context, merchantID uuid.UUID, start, end time.Time) (windowAgg, error) {
+	var out windowAgg
+	if err := s.db.GetContext(ctx, &out.TotalTx, `
+		SELECT COUNT(*)
+		FROM transactions
+		WHERE merchant_id = $1 AND created_at >= $2 AND created_at < $3
+	`, merchantID, start, end); err != nil {
+		return out, err
+	}
+	if err := s.db.GetContext(ctx, &out.SuccessTx, `
+		SELECT COUNT(*)
+		FROM transactions
+		WHERE merchant_id = $1 AND status = 'success' AND created_at >= $2 AND created_at < $3
+	`, merchantID, start, end); err != nil {
+		return out, err
+	}
+	if err := s.db.GetContext(ctx, &out.Revenue, `
+		SELECT COALESCE(SUM(amount), 0)
+		FROM transactions
+		WHERE merchant_id = $1 AND status = 'success' AND created_at >= $2 AND created_at < $3
+	`, merchantID, start, end); err != nil {
+		return out, err
+	}
+	_ = s.db.GetContext(ctx, &out.ActiveCustomers, `
+		SELECT COUNT(DISTINCT customer_email)
+		FROM transactions
+		WHERE merchant_id = $1 AND customer_email IS NOT NULL AND customer_email <> '' AND created_at >= $2 AND created_at < $3
+	`, merchantID, start, end)
+	return out, nil
+}
+
+func pctChangeDecimal(curr, prev decimal.Decimal) *float64 {
+	if prev.IsZero() {
+		if curr.IsZero() {
+			z := 0.0
+			return &z
+		}
+		return nil
+	}
+	diff := curr.Sub(prev).Div(prev).Mul(decimal.NewFromInt(100))
+	f := diff.InexactFloat64()
+	return &f
+}
+
+func pctChangeInt64(curr, prev int64) *float64 {
+	if prev == 0 {
+		if curr == 0 {
+			z := 0.0
+			return &z
+		}
+		return nil
+	}
+	f := float64(curr-prev) / float64(prev) * 100
+	return &f
 }
 
 func (s *ReportingService) GetMerchantStats(ctx context.Context, merchantID uuid.UUID) (*MerchantStats, error) {
@@ -104,43 +176,45 @@ func (s *ReportingService) GetMerchantStats(ctx context.Context, merchantID uuid
 }
 
 func (s *ReportingService) GetDashboardOverview(ctx context.Context, merchantID uuid.UUID, start time.Time, end time.Time) (*DashboardOverview, error) {
-	var totalTx int64
-	if err := s.db.GetContext(ctx, &totalTx, `
-		SELECT COUNT(*)
-		FROM transactions
-		WHERE merchant_id = $1 AND created_at >= $2 AND created_at < $3
-	`, merchantID, start, end); err != nil {
+	curr, err := s.aggregateWindow(ctx, merchantID, start, end)
+	if err != nil {
 		return nil, err
 	}
 
-	var successTx int64
-	if err := s.db.GetContext(ctx, &successTx, `
-		SELECT COUNT(*)
-		FROM transactions
-		WHERE merchant_id = $1 AND status = 'success' AND created_at >= $2 AND created_at < $3
-	`, merchantID, start, end); err != nil {
+	duration := end.Sub(start)
+	prevEnd := start
+	prevStart := start.Add(-duration)
+	prev, err := s.aggregateWindow(ctx, merchantID, prevStart, prevEnd)
+	if err != nil {
 		return nil, err
 	}
 
-	var revenue decimal.Decimal
-	if err := s.db.GetContext(ctx, &revenue, `
-		SELECT COALESCE(SUM(amount), 0)
-		FROM transactions
-		WHERE merchant_id = $1 AND status = 'success' AND created_at >= $2 AND created_at < $3
-	`, merchantID, start, end); err != nil {
-		return nil, err
-	}
-
-	var activeCustomers int64
-	_ = s.db.GetContext(ctx, &activeCustomers, `
-		SELECT COUNT(DISTINCT customer_email)
-		FROM transactions
-		WHERE merchant_id = $1 AND customer_email IS NOT NULL AND customer_email <> '' AND created_at >= $2 AND created_at < $3
-	`, merchantID, start, end)
+	totalTx := curr.TotalTx
+	successTx := curr.SuccessTx
+	revenue := curr.Revenue
+	activeCustomers := curr.ActiveCustomers
 
 	successRate := 0.0
 	if totalTx > 0 {
 		successRate = (float64(successTx) / float64(totalTx)) * 100
+	}
+
+	prevSuccessRate := 0.0
+	if prev.TotalTx > 0 {
+		prevSuccessRate = (float64(prev.SuccessTx) / float64(prev.TotalTx)) * 100
+	}
+
+	var srPts *float64
+	if totalTx > 0 || prev.TotalTx > 0 {
+		d := successRate - prevSuccessRate
+		srPts = &d
+	}
+
+	comparison := &DashboardComparison{
+		RevenuePct:        pctChangeDecimal(curr.Revenue, prev.Revenue),
+		TransactionsPct:   pctChangeInt64(curr.TotalTx, prev.TotalTx),
+		SuccessRatePts:    srPts,
+		CustomersPct:      pctChangeInt64(curr.ActiveCustomers, prev.ActiveCustomers),
 	}
 
 	var revenueTrend []RevenuePoint
@@ -179,6 +253,7 @@ func (s *ReportingService) GetDashboardOverview(ctx context.Context, merchantID 
 		RevenueTrend:       revenueTrend,
 		PaymentMethodSplit: split,
 		RecentTransactions: recent,
+		Comparison:         comparison,
 	}, nil
 }
 

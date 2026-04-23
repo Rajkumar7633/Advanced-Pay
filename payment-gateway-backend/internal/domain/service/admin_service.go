@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/yourcompany/payment-gateway/internal/domain/models"
 	"github.com/yourcompany/payment-gateway/internal/domain/repository"
 	"github.com/yourcompany/payment-gateway/pkg/logger"
@@ -10,12 +11,14 @@ import (
 
 type AdminService struct {
 	adminRepo repository.AdminRepository
+	auth      *AuthService
 	logger    *logger.Logger
 }
 
-func NewAdminService(adminRepo repository.AdminRepository, logger *logger.Logger) *AdminService {
+func NewAdminService(adminRepo repository.AdminRepository, auth *AuthService, logger *logger.Logger) *AdminService {
 	return &AdminService{
 		adminRepo: adminRepo,
+		auth:      auth,
 		logger:    logger,
 	}
 }
@@ -28,9 +31,23 @@ func (s *AdminService) GetAllMerchants(ctx context.Context) ([]repository.AdminM
 	return s.adminRepo.GetAllMerchants(ctx)
 }
 
+func (s *AdminService) GetMerchantDetail(ctx context.Context, merchantID string) (*repository.AdminMerchantDetail, error) {
+	return s.adminRepo.GetMerchantDetail(ctx, merchantID)
+}
+
 func (s *AdminService) UpdateMerchantStatus(ctx context.Context, merchantID string, status string) error {
 	s.logger.Info("Admin updating merchant status", "merchant_id", merchantID, "new_status", status)
-	return s.adminRepo.UpdateMerchantStatus(ctx, merchantID, status)
+	if err := s.adminRepo.UpdateMerchantStatus(ctx, merchantID, status); err != nil {
+		return err
+	}
+	if status == "suspended" && s.auth != nil {
+		if id, err := uuid.Parse(merchantID); err == nil {
+			if invErr := s.auth.InvalidateSessions(ctx, id); invErr != nil {
+				s.logger.Error("invalidate sessions after suspend", "merchant_id", merchantID, "error", invErr)
+			}
+		}
+	}
+	return nil
 }
 
 func (s *AdminService) GetAllDisputes(ctx context.Context) ([]repository.AdminDispute, error) {

@@ -9,8 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, CreditCard, Smartphone, AlertCircle, CheckCircle } from 'lucide-react';
+import { Loader2, CreditCard, Smartphone, AlertCircle, CheckCircle, Bitcoin } from 'lucide-react';
 import jsPDF from 'jspdf';
+import { HolographicCard } from '@/components/checkout/holographic-card';
+import { FraudRadar } from '@/components/checkout/fraud-radar';
+import { CryptoPayment } from '@/components/checkout/crypto-payment';
 
 import api from '@/lib/api-client';
 import { useParams } from 'next/navigation';
@@ -21,10 +24,16 @@ export default function PaymentLinkPage() {
 
   const [isLoadingLink, setIsLoadingLink] = useState(true);
   const [paymentLinkData, setPaymentLinkData] = useState<any>(null);
+  const [merchantTheme, setMerchantTheme] = useState<any>(null);
   
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'upi'>('card');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'upi' | 'crypto'>('card');
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  
+  // Advanced UX Trackers
+  const [focusedField, setFocusedField] = useState<'name' | 'number' | 'expiry' | 'cvc' | null>(null);
+  const [isTypingCard, setIsTypingCard] = useState(false);
+  
   const [formData, setFormData] = useState({
     email: '',
     name: '',
@@ -47,7 +56,10 @@ export default function PaymentLinkPage() {
     (async () => {
       try {
         const res: any = await api.get(`/public/payment-links/${paymentLinkId}`);
-        if (!cancelled) setPaymentLinkData(res.data);
+        if (!cancelled) {
+          setPaymentLinkData(res.data);
+          setMerchantTheme(res.theme);
+        }
       } catch (e) {
         if (!cancelled) {
           setPaymentStatus('error');
@@ -134,7 +146,8 @@ export default function PaymentLinkPage() {
         customer_email: formData.email,
         customer_phone: formData.upiId || '0000000000',
         metadata: {
-          name: formData.name
+          name: formData.name,
+          platform: 'hosted_checkout_link'
         }
       };
 
@@ -310,21 +323,50 @@ export default function PaymentLinkPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4 transition-colors duration-500 relative"
+      style={{
+        backgroundColor: merchantTheme?.background_style === 'dark' ? '#0f172a' : '#f8fafc',
+        color: merchantTheme?.background_style === 'dark' ? '#f8fafc' : '#0f172a'
+      }}
+    >
+      {/* Dynamic Theme Injector */}
+      <style dangerouslySetInnerHTML={{__html: `
+        :root {
+          --brand-primary: ${merchantTheme?.primary_color || '#2563eb'};
+          --brand-radius: ${merchantTheme?.border_radius || '0.5rem'};
+        }
+        .theme-btn {
+          background-color: var(--brand-primary) !important;
+          border-radius: var(--brand-radius) !important;
+          color: white !important;
+        }
+        .theme-card, .theme-input {
+          border-radius: var(--brand-radius) !important;
+        }
+        .theme-text {
+          color: var(--brand-primary) !important;
+        }
+      `}} />
+
       <div className="w-full max-w-lg space-y-6">
         {/* Header Card */}
-        <Card className="border-0 shadow-lg">
-          <CardHeader className="text-center pb-4">
-            <div className="mx-auto mb-4 h-12 w-12 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center">
-              <CreditCard className="h-6 w-6 text-white" />
-            </div>
+        <Card className="border-0 shadow-2xl overflow-hidden relative theme-card" style={{ backgroundColor: merchantTheme?.background_style === 'dark' ? '#1e293b' : '#ffffff' }}>
+          <div className="h-2 w-full absolute top-0 left-0" style={{ backgroundColor: merchantTheme?.primary_color || '#2563eb' }} />
+          <CardHeader className="text-center pb-4 pt-8">
+            {merchantTheme?.logo_url ? (
+               <img src={merchantTheme.logo_url} alt="Logo" className="mx-auto mb-4 h-12 object-contain" />
+            ) : (
+               <div className="mx-auto mb-4 h-12 w-12 rounded-full flex items-center justify-center theme-btn">
+                 <CreditCard className="h-5 w-5 text-white" />
+               </div>
+            )}
             <CardTitle className="text-2xl font-bold text-gray-900">Secure Payment</CardTitle>
             <p className="text-sm text-gray-600">Complete your payment safely and securely</p>
           </CardHeader>
         </Card>
 
         {/* Payment Details Card */}
-        <Card className="shadow-lg">
+        <Card className="shadow-2xl border-0 theme-card" style={{ backgroundColor: merchantTheme?.background_style === 'dark' ? '#1e293b' : '#ffffff' }}>
           <CardContent className="p-6">
             <div className="space-y-4">
               {/* Payment Link Info */}
@@ -351,14 +393,14 @@ export default function PaymentLinkPage() {
               <Separator />
 
               {/* Payment Method Selection */}
-              <div className="space-y-2">
+              <div className="space-y-4">
                 <Label className="text-sm font-medium">Payment Method</Label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <Button
                     type="button"
                     variant={paymentMethod === 'card' ? 'default' : 'outline'}
                     className="h-12"
-                    onClick={() => setPaymentMethod('card')}
+                    onClick={() => { setPaymentMethod('card'); setFocusedField(null); setIsTypingCard(false); }}
                   >
                     <CreditCard className="h-4 w-4 mr-2" />
                     Card
@@ -367,18 +409,43 @@ export default function PaymentLinkPage() {
                     type="button"
                     variant={paymentMethod === 'upi' ? 'default' : 'outline'}
                     className="h-12"
-                    onClick={() => setPaymentMethod('upi')}
+                    onClick={() => { setPaymentMethod('upi'); setFocusedField(null); setIsTypingCard(false); }}
                   >
                     <Smartphone className="h-4 w-4 mr-2" />
                     UPI
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={paymentMethod === 'crypto' ? 'default' : 'outline'}
+                    className="h-12 bg-gradient-to-r hover:from-orange-500 hover:to-amber-500 hover:text-white border-orange-200"
+                    onClick={() => { setPaymentMethod('crypto'); setFocusedField(null); setIsTypingCard(false); }}
+                  >
+                    <Bitcoin className="h-4 w-4 mr-2 text-orange-500 group-hover:text-white" />
+                    Crypto
                   </Button>
                 </div>
               </div>
 
               <Separator />
 
-              {/* Payment Form */}
-              <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Advanced UI Layouts */}
+              {paymentMethod === 'card' && (
+                 <HolographicCard 
+                    focusedField={focusedField}
+                    cardNumber={formData.cardNumber}
+                    cardName={formData.name}
+                    expiry={formData.expiry}
+                    cvv={formData.cvv}
+                 />
+              )}
+
+              {paymentMethod === 'crypto' && (
+                 <CryptoPayment amount={amount} />
+              )}
+
+              {/* Form Entry */}
+              {paymentMethod !== 'crypto' && (
+                 <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
                 {/* Customer Info */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -387,7 +454,11 @@ export default function PaymentLinkPage() {
                       id="name"
                       placeholder="John Doe"
                       value={formData.name}
-                      onChange={(e) => handleInputChange('name', e.target.value)}
+                      onFocus={() => setFocusedField('name')}
+                      onChange={(e) => {
+                         handleInputChange('name', e.target.value);
+                         setIsTypingCard(true);
+                      }}
                       className={errors.name ? 'border-red-500' : ''}
                     />
                     {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
@@ -399,6 +470,7 @@ export default function PaymentLinkPage() {
                       type="email"
                       placeholder="john@example.com"
                       value={formData.email}
+                      onFocus={() => setFocusedField(null)}
                       onChange={(e) => handleInputChange('email', e.target.value)}
                       className={errors.email ? 'border-red-500' : ''}
                     />
@@ -415,7 +487,11 @@ export default function PaymentLinkPage() {
                         id="cardNumber"
                         placeholder="1234 5678 9012 3456"
                         value={formData.cardNumber}
-                        onChange={(e) => handleInputChange('cardNumber', formatCardNumber(e.target.value))}
+                        onFocus={() => setFocusedField('number')}
+                        onChange={(e) => {
+                           handleInputChange('cardNumber', formatCardNumber(e.target.value));
+                           setIsTypingCard(true);
+                        }}
                         maxLength={19}
                         className={errors.cardNumber ? 'border-red-500' : ''}
                       />
@@ -428,7 +504,11 @@ export default function PaymentLinkPage() {
                           id="expiry"
                           placeholder="MM/YY"
                           value={formData.expiry}
-                          onChange={(e) => handleInputChange('expiry', formatExpiry(e.target.value))}
+                          onFocus={() => setFocusedField('expiry')}
+                          onChange={(e) => {
+                             handleInputChange('expiry', formatExpiry(e.target.value));
+                             setIsTypingCard(true);
+                          }}
                           maxLength={5}
                           className={errors.expiry ? 'border-red-500' : ''}
                         />
@@ -439,8 +519,13 @@ export default function PaymentLinkPage() {
                         <Input
                           id="cvv"
                           placeholder="123"
+                          type="password"
                           value={formData.cvv}
-                          onChange={(e) => handleInputChange('cvv', e.target.value.replace(/\D/g, ''))}
+                          onFocus={() => setFocusedField('cvc')}
+                          onChange={(e) => {
+                             handleInputChange('cvv', e.target.value.replace(/\D/g, ''));
+                             setIsTypingCard(true);
+                          }}
                           maxLength={4}
                           className={errors.cvv ? 'border-red-500' : ''}
                         />
@@ -472,8 +557,8 @@ export default function PaymentLinkPage() {
 
                 <Button
                   type="submit"
-                  className="w-full h-12 text-base font-semibold"
                   disabled={isProcessing}
+                  className="w-full h-12 text-lg font-bold shadow-lg hover:scale-[1.02] transform transition-transform theme-btn"
                 >
                   {isProcessing ? (
                     <>
@@ -484,13 +569,21 @@ export default function PaymentLinkPage() {
                     `Pay ${paymentLinkData?.currency === 'USD' ? '$' : '₹'}${amount ? amount.toLocaleString('en-IN') : '0'}`
                   )}
                 </Button>
+
+                {paymentMethod === 'card' && (
+                   <FraudRadar 
+                      cardBrand={formData.cardNumber.startsWith('3') ? 'AMEX' : 'VISA'} 
+                      isTyping={isTypingCard} 
+                   />
+                )}
               </form>
+              )}
             </div>
           </CardContent>
         </Card>
 
         {/* Security Notice */}
-        <Card className="border-0 shadow-sm">
+        <Card className="border-0 shadow-sm theme-card" style={{ backgroundColor: merchantTheme?.background_style === 'dark' ? '#1e293b' : '#ffffff' }}>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2 text-sm text-gray-600">
               <AlertCircle className="h-4 w-4" />

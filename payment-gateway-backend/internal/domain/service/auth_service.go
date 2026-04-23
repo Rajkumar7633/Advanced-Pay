@@ -108,8 +108,8 @@ func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (*mod
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
-	// Check merchant status
-	if merchant.Status != "active" {
+	// Check merchant status (admin may set approved; self-registered default is active)
+	if merchant.Status != "active" && merchant.Status != "approved" {
 		return nil, fmt.Errorf("account is %s", merchant.Status)
 	}
 
@@ -180,6 +180,9 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*m
 	merchant, err := s.merchantRepo.GetByID(ctx, merchantUUID)
 	if err != nil {
 		return nil, err
+	}
+	if merchant.Status != "active" && merchant.Status != "approved" {
+		return nil, fmt.Errorf("account is %s", merchant.Status)
 	}
 
 	// Generate new access token
@@ -332,6 +335,9 @@ func (s *AuthService) LoginVerify2FA(ctx context.Context, req *models.Verify2FAR
 	merchant, err := s.merchantRepo.GetByID(ctx, merchantID)
 	if err != nil || merchant.TwoFactorSecret == nil || !merchant.TwoFactorEnabled {
 		return nil, fmt.Errorf("invalid request")
+	}
+	if merchant.Status != "active" && merchant.Status != "approved" {
+		return nil, fmt.Errorf("account is %s", merchant.Status)
 	}
 
 	valid := totp.Validate(req.Code, *merchant.TwoFactorSecret)

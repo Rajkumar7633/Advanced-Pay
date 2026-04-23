@@ -81,6 +81,8 @@ type WebhookRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	CreateEvent(ctx context.Context, event *models.WebhookEvent) error
 	GetPendingEvents(ctx context.Context, limit int) ([]*models.WebhookEvent, error)
+	GetEvents(ctx context.Context, merchantID uuid.UUID, limit int, offset int) ([]*models.WebhookEvent, error)
+	ResetEvent(ctx context.Context, eventID uuid.UUID, merchantID uuid.UUID) error
 	UpdateEventStatus(ctx context.Context, eventID uuid.UUID, status string, attempts int, nextRetry *time.Time) error
 }
 

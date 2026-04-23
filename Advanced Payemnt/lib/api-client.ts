@@ -30,7 +30,17 @@ class ApiClient {
     // Response interceptor
     this.client.interceptors.response.use(
       (response) => response.data,
-      (error: AxiosError) => {
+      (error: AxiosError<{ code?: string; error?: string }>) => {
+        const code = error.response?.data?.code;
+        if (error.response?.status === 403 && code === 'MERCHANT_INACTIVE') {
+          if (typeof window !== 'undefined') {
+            const currentPath = window.location.pathname;
+            if (!currentPath.startsWith('/checkout') && !currentPath.startsWith('/payment')) {
+              localStorage.removeItem('authToken');
+              window.location.href = '/login?reason=account_inactive';
+            }
+          }
+        }
         if (error.response?.status === 401) {
           // Handle unauthorized
           if (typeof window !== 'undefined') {

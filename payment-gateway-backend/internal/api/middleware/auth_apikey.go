@@ -12,6 +12,10 @@ import (
 	"github.com/yourcompany/payment-gateway/pkg/logger"
 )
 
+func merchantAPIAllowed(status string) bool {
+	return status == "active" || status == "approved"
+}
+
 func APIKeyAuth(merchantRepo repository.MerchantRepository, log *logger.Logger) gin.HandlerFunc {
 	// Initialize high speed memory tier
 	l1 := cache.GetL1Cache()
@@ -47,12 +51,18 @@ func APIKeyAuth(merchantRepo repository.MerchantRepository, log *logger.Logger) 
 		// Fast L1 Cache hit
 		if cachedVal, ok := l1.Get("apikey:" + apiKey); ok {
 			parts := strings.Split(cachedVal, "|")
-			if len(parts) == 2 {
+			if len(parts) == 3 {
+				if !merchantAPIAllowed(parts[2]) {
+					c.JSON(http.StatusForbidden, gin.H{"error": "merchant account is not active", "code": "MERCHANT_INACTIVE"})
+					c.Abort()
+					return
+				}
 				c.Set("merchant_id", parts[0])
 				c.Set("environment", parts[1])
 				c.Next()
 				return
 			}
+			// Legacy 2-field cache entries: ignore and re-resolve below
 		}
 
 		merchant, env, err := merchantRepo.GetMerchantBySecretKey(c.Request.Context(), apiKey)
@@ -62,9 +72,14 @@ func APIKeyAuth(merchantRepo repository.MerchantRepository, log *logger.Logger) 
 			c.Abort()
 			return
 		}
+		if !merchantAPIAllowed(merchant.Status) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "merchant account is not active", "code": "MERCHANT_INACTIVE", "status": merchant.Status})
+			c.Abort()
+			return
+		}
 
-		// Store high speed L1 cache (15 minute TTL)
-		l1.Set("apikey:"+apiKey, merchant.ID.String()+"|"+env, 15*time.Minute)
+		// Store high speed L1 cache (15 minute TTL) — include status so suspend takes effect when cache expires
+		l1.Set("apikey:"+apiKey, merchant.ID.String()+"|"+env+"|"+merchant.Status, 15*time.Minute)
 
 		// Inject merchant details into context
 		c.Set("merchant_id", merchant.ID.String())

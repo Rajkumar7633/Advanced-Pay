@@ -27,9 +27,40 @@ type HourlyMetric struct {
 type AdminMerchant struct {
 	ID           string          `json:"id" db:"id"`
 	Name         string          `json:"name" db:"name"`
+	Email        string          `json:"email" db:"email"`
+	Phone        string          `json:"phone" db:"phone"`
+	Industry     string          `json:"industry" db:"industry"`
+	City         string          `json:"city" db:"city"`
+	Country      string          `json:"country" db:"country"`
 	Volume       decimal.Decimal `json:"volume" db:"volume"`
 	Status       string          `json:"status" db:"status"`
 	CreationDate string          `json:"date" db:"date"`
+}
+
+// AdminMerchantDetail is the full merchant record plus aggregates for admin review.
+type AdminMerchantDetail struct {
+	ID                  string `json:"id" db:"id"`
+	BusinessName        string `json:"business_name" db:"business_name"`
+	Email               string `json:"email" db:"email"`
+	Phone               string `json:"phone" db:"phone"`
+	Status              string `json:"status" db:"status"`
+	KYCStatus           string `json:"kyc_status" db:"kyc_status"`
+	CreatedAt           string `json:"created_at" db:"created_at"`
+	Description         string `json:"description" db:"description"`
+	Website             string `json:"website" db:"website"`
+	Industry            string `json:"industry" db:"industry"`
+	GSTNumber           string `json:"gst_number" db:"gst_number"`
+	TaxID               string `json:"tax_id" db:"tax_id"`
+	AddressStreet       string `json:"address_street" db:"address_street"`
+	AddressCity         string `json:"address_city" db:"address_city"`
+	AddressState        string `json:"address_state" db:"address_state"`
+	AddressCountry      string `json:"address_country" db:"address_country"`
+	AddressPostalCode   string `json:"address_postal_code" db:"address_postal_code"`
+	TwoFactorEnabled    bool   `json:"two_factor_enabled" db:"two_factor_enabled"`
+	TotalTransactions   int64  `json:"total_transactions" db:"total_transactions"`
+	SuccessfulVolume    string `json:"successful_volume" db:"successful_volume"`
+	OpenDisputes        int64  `json:"open_disputes" db:"open_disputes"`
+	ActiveSubscriptions int64  `json:"active_subscriptions" db:"active_subscriptions"`
 }
 
 type AdminDispute struct {
@@ -79,6 +110,7 @@ type AdminWebhookStats struct {
 type AdminRepository interface {
 	GetSystemMetrics(ctx context.Context) (*AdminSystemMetrics, error)
 	GetAllMerchants(ctx context.Context) ([]AdminMerchant, error)
+	GetMerchantDetail(ctx context.Context, merchantID string) (*AdminMerchantDetail, error)
 	UpdateMerchantStatus(ctx context.Context, merchantID string, status string) error
 	GetAllDisputes(ctx context.Context) ([]AdminDispute, error)
 	ResolveDispute(ctx context.Context, disputeID string, status string) error
@@ -152,6 +184,11 @@ func (r *adminRepository) GetAllMerchants(ctx context.Context) ([]AdminMerchant,
 		SELECT 
 			m.id::text as id, 
 			m.business_name as name, 
+			m.email,
+			COALESCE(m.phone, '') as phone,
+			COALESCE(m.industry, 'General') as industry,
+			COALESCE(m.address_city, '') as city,
+			COALESCE(m.address_country, '') as country,
 			COALESCE(SUM(t.amount), 0) as volume, 
 			m.status, 
 			TO_CHAR(m.created_at, 'YYYY-MM-DD') as date
@@ -161,6 +198,41 @@ func (r *adminRepository) GetAllMerchants(ctx context.Context) ([]AdminMerchant,
 		ORDER BY m.created_at DESC
 	`)
 	return merchants, err
+}
+
+func (r *adminRepository) GetMerchantDetail(ctx context.Context, merchantID string) (*AdminMerchantDetail, error) {
+	var d AdminMerchantDetail
+	err := r.db.GetContext(ctx, &d, `
+		SELECT
+			m.id::text AS id,
+			m.business_name,
+			m.email,
+			COALESCE(m.phone, '') AS phone,
+			m.status,
+			COALESCE(m.kyc_status, '') AS kyc_status,
+			TO_CHAR(m.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
+			COALESCE(m.description, '') AS description,
+			COALESCE(m.website, '') AS website,
+			COALESCE(m.industry, '') AS industry,
+			COALESCE(m.gst_number, '') AS gst_number,
+			COALESCE(m.tax_id, '') AS tax_id,
+			COALESCE(m.address_street, '') AS address_street,
+			COALESCE(m.address_city, '') AS address_city,
+			COALESCE(m.address_state, '') AS address_state,
+			COALESCE(m.address_country, '') AS address_country,
+			COALESCE(m.address_postal_code, '') AS address_postal_code,
+			m.two_factor_enabled,
+			(SELECT COUNT(*) FROM transactions WHERE merchant_id = m.id) AS total_transactions,
+			(SELECT COALESCE(SUM(amount), 0)::text FROM transactions WHERE merchant_id = m.id AND status = 'success') AS successful_volume,
+			(SELECT COUNT(*) FROM disputes d WHERE d.merchant_id = m.id AND d.status IN ('open', 'under_review')) AS open_disputes,
+			(SELECT COUNT(*) FROM subscriptions s WHERE s.merchant_id = m.id AND s.status = 'active') AS active_subscriptions
+		FROM merchants m
+		WHERE m.id = $1
+	`, merchantID)
+	if err != nil {
+		return nil, err
+	}
+	return &d, nil
 }
 
 func (r *adminRepository) UpdateMerchantStatus(ctx context.Context, merchantID string, status string) error {

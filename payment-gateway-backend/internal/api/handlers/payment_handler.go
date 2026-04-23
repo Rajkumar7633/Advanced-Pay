@@ -19,14 +19,16 @@ type PaymentHandler struct {
 	paymentService  *service.PaymentService
 	webhookService  *service.WebhookService
 	paymentLinkRepo repository.PaymentLinkRepository
+	merchantRepo    repository.MerchantRepository
 	logger          *logger.Logger
 }
 
-func NewPaymentHandler(paymentService *service.PaymentService, webhookService *service.WebhookService, paymentLinkRepo repository.PaymentLinkRepository, logger *logger.Logger) *PaymentHandler {
+func NewPaymentHandler(paymentService *service.PaymentService, webhookService *service.WebhookService, paymentLinkRepo repository.PaymentLinkRepository, merchantRepo repository.MerchantRepository, logger *logger.Logger) *PaymentHandler {
 	return &PaymentHandler{
 		paymentService:  paymentService,
 		webhookService:  webhookService,
 		paymentLinkRepo: paymentLinkRepo,
+		merchantRepo:    merchantRepo,
 		logger:          logger,
 	}
 }
@@ -265,6 +267,60 @@ func (h *PaymentHandler) TestWebhook(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Webhook test payload dispatched"})
 }
 
+func (h *PaymentHandler) ListWebhookEvents(c *gin.Context) {
+	merchantID := c.GetString("merchant_id")
+	mid, err := uuid.Parse(merchantID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid merchant"})
+		return
+	}
+
+	if h.webhookService == nil || h.webhookService.GetRepo() == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "webhook service unavailable"})
+		return
+	}
+
+	limit := parseIntQuery(c, "limit", 50)
+	offset := parseIntQuery(c, "offset", 0)
+
+	events, err := h.webhookService.GetRepo().GetEvents(c.Request.Context(), mid, limit, offset)
+	if err != nil {
+		h.logger.Error("Failed to list webhook events", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list webhook delivery logs"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": events})
+}
+
+func (h *PaymentHandler) RetryWebhookEvent(c *gin.Context) {
+	merchantID := c.GetString("merchant_id")
+	mid, err := uuid.Parse(merchantID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid merchant"})
+		return
+	}
+
+	eventID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid event id"})
+		return
+	}
+
+	if h.webhookService == nil || h.webhookService.GetRepo() == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "webhook service unavailable"})
+		return
+	}
+
+	err = h.webhookService.GetRepo().ResetEvent(c.Request.Context(), eventID, mid)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Event queued for retry"})
+}
+
 func (h *PaymentHandler) ListPaymentLinks(c *gin.Context) {
 	merchantID := c.GetString("merchant_id")
 	mid, err := uuid.Parse(merchantID)
@@ -356,8 +412,18 @@ func (h *PaymentHandler) GetPaymentLink(c *gin.Context) {
 	}
 	_ = h.paymentLinkRepo.Update(c.Request.Context(), link)
 
+	// Fetch merchant to inject specific branding theme into the checkout pane
+	var theme interface{} = nil
+	if h.merchantRepo != nil {
+		merchant, err := h.merchantRepo.GetByID(c.Request.Context(), link.MerchantID)
+		if err == nil && merchant != nil {
+			theme = merchant.Settings.Theme
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"data": link,
+		"data":  link,
+		"theme": theme,
 	})
 }
 

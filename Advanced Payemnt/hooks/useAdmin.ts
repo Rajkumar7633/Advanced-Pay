@@ -27,6 +27,31 @@ export interface AdminMerchant {
   date: string;
 }
 
+export interface AdminMerchantDetail {
+  id: string;
+  business_name: string;
+  email: string;
+  phone: string;
+  status: string;
+  kyc_status: string;
+  created_at: string;
+  description: string;
+  website: string;
+  industry: string;
+  gst_number: string;
+  tax_id: string;
+  address_street: string;
+  address_city: string;
+  address_state: string;
+  address_country: string;
+  address_postal_code: string;
+  two_factor_enabled: boolean;
+  total_transactions: number;
+  successful_volume: string;
+  open_disputes: number;
+  active_subscriptions: number;
+}
+
 export interface AdminDispute {
   id: string;
   merchant: string;
@@ -122,6 +147,16 @@ export const useAdminMerchants = () =>
     refetchInterval: false,
   });
 
+export const useAdminMerchantDetail = (merchantId: string | null, enabled = true) =>
+  useQuery({
+    queryKey: ['admin-merchant', merchantId],
+    queryFn: async (): Promise<AdminMerchantDetail> => {
+      const r = await axios.get(`${API_URL}/admin/merchants/${merchantId}`, { headers: getAdminHeaders() });
+      return r.data.data;
+    },
+    enabled: enabled && !!merchantId,
+  });
+
 export const useAdminDisputes = () =>
   useQuery({
     queryKey: ['admin-disputes'],
@@ -165,6 +200,7 @@ export const useAdminMutateMerchantStatus = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-merchants'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-merchant'] });
       queryClient.invalidateQueries({ queryKey: ['admin-metrics'] });
     },
   });
