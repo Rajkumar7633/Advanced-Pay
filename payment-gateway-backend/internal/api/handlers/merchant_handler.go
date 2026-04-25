@@ -128,6 +128,43 @@ func (h *MerchantHandler) UpdateProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, merchant)
 }
 
+// POST /api/v1/merchant/kyc
+func (h *MerchantHandler) UploadKYC(c *gin.Context) {
+	merchantID, _ := uuid.Parse(c.GetString("merchant_id"))
+	
+	var req map[string]interface{}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON mapping"})
+		return
+	}
+
+	if err := h.merchantService.SubmitKYC(c.Request.Context(), merchantID, req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit KYC documents"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "KYC submitted successfully and is pending review"})
+}
+
+// GetBilling retrieves the merchant's platform billing profile and invoices
+func (h *MerchantHandler) GetBilling(c *gin.Context) {
+	merchantID, _ := uuid.Parse(c.GetString("merchant_id"))
+
+	profile, invoices, err := h.merchantService.GetPlatformBilling(c.Request.Context(), merchantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load platform billing profile"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"profile":  profile,
+			"invoices": invoices,
+		},
+	})
+}
+
+
 func (h *MerchantHandler) GetStats(c *gin.Context) {
 	merchantID, _ := uuid.Parse(c.GetString("merchant_id"))
 	if h.reporting == nil {

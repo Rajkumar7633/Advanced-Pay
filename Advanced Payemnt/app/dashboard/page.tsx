@@ -10,7 +10,7 @@ import {
   Users, 
   CheckCircle, 
   AlertCircle,
-  ArrowUpRight,
+  ArrowUpRight, 
   ArrowDownLeft,
   MoreHorizontal,
   Download,
@@ -115,7 +115,7 @@ export default function DashboardPage() {
     let ws: WebSocket;
     const token = localStorage.getItem('token') || '';
     if (typeof window !== 'undefined') {
-      ws = new WebSocket(`ws://localhost:8080/api/v1/ws/pulse?token=${token}`);
+      ws = new WebSocket(`ws://localhost:8081/api/v1/ws/pulse?token=${token}`);
       
       ws.onmessage = (event) => {
         try {
@@ -347,7 +347,7 @@ export default function DashboardPage() {
                       labelStyle={{ color: '#e2e8f0' }}
                     />
                     <Legend />
-                    <Line type="monotone" dataKey="amount" stroke="#0066ff" strokeWidth={2} dot={{ fill: '#0066ff' }} />
+                    <Line type="monotone" connectNulls={true} dataKey="amount" stroke="#0066ff" strokeWidth={2} dot={{ fill: '#0066ff', r: 4 }} activeDot={{ r: 6 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -391,9 +391,9 @@ export default function DashboardPage() {
           {/* Master Plan Unique Features */}
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
             <SmartRoutingWidget recentTransactions={recentTransactions} />
-            <SuccessRateMonitor />
+            <SuccessRateMonitor recentTransactions={recentTransactions} />
             <FraudScoreCard recentTransactions={recentTransactions} />
-            <BlockchainVerification />
+            <BlockchainVerification recentTransactions={recentTransactions} />
           </div>
 
           {/* Recent Transactions */}

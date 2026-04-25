@@ -73,10 +73,11 @@ type Merchant struct {
 	PasswordHash      string           `json:"-" db:"password_hash"`
 	APIKeyHash        string           `json:"-" db:"api_key_hash"`
 	APISecretHash     string           `json:"-" db:"api_secret_hash"`
-	Status            string           `json:"status" db:"status"`
-	KYCStatus         string           `json:"kyc_status" db:"kyc_status"`
-	TwoFactorEnabled  bool             `json:"two_factor_enabled" db:"two_factor_enabled"`
-	TwoFactorSecret   *string          `json:"-" db:"two_factor_secret"`
+	Status            string                 `json:"status" db:"status"`
+	KYCStatus         string                 `json:"kyc_status" db:"kyc_status"`
+	KYCDocuments      KYCDocuments           `json:"kyc_documents" db:"kyc_documents"`
+	TwoFactorEnabled  bool                   `json:"two_factor_enabled" db:"two_factor_enabled"`
+	TwoFactorSecret   *string                `json:"-" db:"two_factor_secret"`
 	TokenVersion      int              `json:"-" db:"token_version"`
 	Settings          MerchantSettings `json:"settings" db:"settings"`
 	CreatedAt         time.Time        `json:"created_at" db:"created_at"`
@@ -88,6 +89,30 @@ type ThemeSettings struct {
 	BorderRadius    string `json:"border_radius"`
 	BackgroundStyle string `json:"background_style"`
 	LogoURL         string `json:"logo_url"`
+}
+
+// KYCDocuments stores compliant identity verification artifacts in JSONB
+type KYCDocuments map[string]interface{}
+
+// Value implements the driver.Valuer interface for KYCDocuments
+func (k KYCDocuments) Value() (driver.Value, error) {
+	if k == nil {
+		return "{}", nil
+	}
+	return json.Marshal(k)
+}
+
+// Scan implements the sql.Scanner interface for KYCDocuments
+func (k *KYCDocuments) Scan(value interface{}) error {
+	if value == nil {
+		*k = make(KYCDocuments)
+		return nil
+	}
+	b, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("type assertion to []byte failed")
+	}
+	return json.Unmarshal(b, k)
 }
 
 // MerchantSettings holds merchant-specific settings
@@ -260,4 +285,59 @@ type TeamMember struct {
 	Status     string    `json:"status" db:"status"`
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// BankAccount represents a merchant's bank account
+type BankAccount struct {
+	ID            uuid.UUID  `json:"id" db:"id"`
+	MerchantID    uuid.UUID  `json:"merchant_id" db:"merchant_id"`
+	BankName      string     `json:"bankName" db:"bank_name"`
+	AccountNumber string     `json:"accountNumber" db:"account_number"`
+	AccountHolder string     `json:"accountHolder" db:"account_holder"`
+	IFSC          string     `json:"ifsc" db:"ifsc"`
+	AccountType   string     `json:"accountType" db:"account_type"`
+	IsDefault     bool       `json:"isDefault" db:"is_default"`
+	Status        string     `json:"status" db:"status"`
+	CreatedAt     time.Time  `json:"createdAt" db:"created_at"`
+	UpdatedAt     time.Time  `json:"updatedAt" db:"updated_at"`
+}
+
+// Withdrawal represents a withdrawal request
+type Withdrawal struct {
+	ID              uuid.UUID  `json:"id" db:"id"`
+	MerchantID      uuid.UUID  `json:"merchantId" db:"merchant_id"`
+	Amount          float64    `json:"amount" db:"amount"`
+	Status          string     `json:"status" db:"status"`
+	BankAccountID   *uuid.UUID `json:"bankAccountId" db:"bank_account_id"`
+	BankAccountInfo string     `json:"bankAccountInfo" db:"bank_account_info"`
+	UTRNumber       *string    `json:"utr" db:"utr_number"`
+	FailureReason   *string    `json:"failureReason" db:"failure_reason"`
+	ProcessedAt     *time.Time `json:"processedAt" db:"processed_at"`
+	CreatedAt       time.Time  `json:"createdAt" db:"created_at"`
+	UpdatedAt       time.Time  `json:"updatedAt" db:"updated_at"`
+}
+
+// PlatformBillingProfile represents the platform pricing plan assigned to a merchant
+type PlatformBillingProfile struct {
+	MerchantID        uuid.UUID       `json:"merchant_id" db:"merchant_id"`
+	PlanName          string          `json:"plan_name" db:"plan_name"`
+	FeePercentage     float64         `json:"fee_percentage" db:"fee_percentage"`
+	FixedFee          float64         `json:"fixed_fee" db:"fixed_fee"`
+	NextBillingDate   *time.Time      `json:"next_billing_date" db:"next_billing_date"`
+	PlatformCardBrand *string         `json:"platform_card_brand" db:"platform_card_brand"`
+	PlatformCardLast4 *string         `json:"platform_card_last4" db:"platform_card_last4"`
+	CreatedAt         time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at" db:"updated_at"`
+}
+
+// PlatformInvoice represents a generated bill covering platform fees
+type PlatformInvoice struct {
+	ID         uuid.UUID       `json:"id" db:"id"`
+	MerchantID uuid.UUID       `json:"merchant_id" db:"merchant_id"`
+	Amount     float64         `json:"amount" db:"amount"`
+	Status     string          `json:"status" db:"status"`
+	DueDate    time.Time       `json:"due_date" db:"due_date"`
+	PdfUrl     *string         `json:"pdf_url" db:"pdf_url"`
+	CreatedAt  time.Time       `json:"created_at" db:"created_at"`
+	PaidAt     *time.Time      `json:"paid_at" db:"paid_at"`
 }

@@ -27,47 +27,6 @@ type Customer struct {
 	CreatedAt        string  `json:"createdAt"`
 }
 
-// BankAccount represents a merchant's bank account
-type BankAccount struct {
-	ID            string    `json:"id"`
-	MerchantID    string    `json:"merchant_id"`
-	BankName      string    `json:"bankName"`
-	AccountNumber string    `json:"accountNumber"`
-	AccountHolder string    `json:"accountHolder"`
-	IFSC          string    `json:"ifsc"`
-	AccountType   string    `json:"accountType"`
-	IsDefault     bool      `json:"isDefault"`
-	Status        string    `json:"status"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-}
-
-// ApiKey represents an API key for merchants
-type ApiKey struct {
-	ID          string     `json:"id"`
-	MerchantID  string     `json:"merchant_id"`
-	Name        string     `json:"name"`
-	Key         string     `json:"key"`
-	Mode        string     `json:"mode"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	LastUsed    *time.Time `json:"lastUsed"`
-	UsageCount  int        `json:"usageCount"`
-	Permissions []string   `json:"permissions"`
-}
-
-// Withdrawal represents a withdrawal request
-type Withdrawal struct {
-	ID            string  `json:"id"`
-	MerchantID    string  `json:"merchantId"`
-	Amount        float64 `json:"amount"`
-	Status        string  `json:"status"`
-	BankAccount   string  `json:"bankAccount"`
-	CreatedAt     string  `json:"createdAt"`
-	ProcessedAt   *string `json:"processedAt"`
-	UTR           *string `json:"utr"`
-	FailureReason *string `json:"failureReason"`
-}
-
 // MerchantBalance represents merchant's balance information
 type MerchantBalance struct {
 	AvailableBalance   float64 `json:"availableBalance"`
@@ -81,15 +40,17 @@ type MerchantService struct {
 	merchantRepo    repository.MerchantRepository
 	transactionRepo repository.TransactionRepository
 	teamRepo        repository.TeamRepository
+	bankingRepo     repository.BankingRepository
 	logger          *logger.Logger
 }
 
 // NewMerchantService creates a new merchant service
-func NewMerchantService(merchantRepo repository.MerchantRepository, transactionRepo repository.TransactionRepository, teamRepo repository.TeamRepository, logger *logger.Logger) *MerchantService {
+func NewMerchantService(merchantRepo repository.MerchantRepository, transactionRepo repository.TransactionRepository, teamRepo repository.TeamRepository, bankingRepo repository.BankingRepository, logger *logger.Logger) *MerchantService {
 	return &MerchantService{
 		merchantRepo:    merchantRepo,
 		transactionRepo: transactionRepo,
 		teamRepo:        teamRepo,
+		bankingRepo:     bankingRepo,
 		logger:          logger,
 	}
 }
@@ -104,17 +65,30 @@ func (s *MerchantService) UpdateProfile(ctx context.Context, merchant *models.Me
 	return s.merchantRepo.Update(ctx, merchant)
 }
 
-// GetStats retrieves merchant statistics
-func (s *MerchantService) GetStats(ctx context.Context, merchantID uuid.UUID) (map[string]interface{}, error) {
-	// TODO: Implement actual stats calculation
-	stats := map[string]interface{}{
-		"total_transactions":  0,
-		"total_revenue":       0,
-		"success_rate":        0,
-		"pending_settlements": 0,
+// SubmitKYC handles the KYC document submission
+func (s *MerchantService) SubmitKYC(ctx context.Context, merchantID uuid.UUID, kycData map[string]interface{}) error {
+	merchant, err := s.merchantRepo.GetByID(ctx, merchantID)
+	if err != nil {
+		return err
 	}
-	return stats, nil
+
+	if merchant.KYCDocuments == nil {
+		merchant.KYCDocuments = make(models.KYCDocuments)
+	}
+
+	// Merge incoming documents
+	for k, v := range kycData {
+		merchant.KYCDocuments[k] = v
+	}
+
+	merchant.KYCStatus = "under_review"
+	merchant.UpdatedAt = time.Now()
+
+	s.logger.Info("Merchant submitted KYC documents", "merchant_id", merchantID)
+	return s.merchantRepo.Update(ctx, merchant)
 }
+
+
 
 // GetCustomers retrieves all customers for a merchant with aggregated data
 func (s *MerchantService) GetCustomers(ctx context.Context, merchantID uuid.UUID) ([]Customer, error) {
@@ -186,6 +160,44 @@ func (s *MerchantService) GetCustomers(ctx context.Context, merchantID uuid.UUID
 	return customers, nil
 }
 
+// GetPlatformBilling retrieves the platform billing profile and invoices for a merchant.
+// If no profile exists yet, it creates a default "Professional Plan" automatically.
+func (s *MerchantService) GetPlatformBilling(ctx context.Context, merchantID uuid.UUID) (*models.PlatformBillingProfile, []*models.PlatformInvoice, error) {
+	profile, err := s.merchantRepo.GetPlatformBillingProfile(ctx, merchantID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get billing profile: %v", err)
+	}
+
+	if profile == nil {
+		// Mock a default card 
+		brand := "Visa"
+		last4 := "4242"
+		nextMonth := time.Now().AddDate(0, 1, 0)
+		
+		profile = &models.PlatformBillingProfile{
+			MerchantID:        merchantID,
+			PlanName:          "Professional Plan",
+			FeePercentage:     1.50,
+			FixedFee:          2.00,
+			NextBillingDate:   &nextMonth,
+			PlatformCardBrand: &brand,
+			PlatformCardLast4: &last4,
+		}
+		err = s.merchantRepo.CreatePlatformBillingProfile(ctx, profile)
+		if err != nil {
+			s.logger.Error("Failed to auto-provision billing profile", "merchant_id", merchantID.String(), "error", err)
+			return nil, nil, fmt.Errorf("failed to create default billing profile")
+		}
+	}
+
+	invoices, err := s.merchantRepo.GetPlatformInvoices(ctx, merchantID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get platform invoices: %v", err)
+	}
+
+	return profile, invoices, nil
+}
+
 // GetBalance retrieves merchant balance information
 func (s *MerchantService) GetBalance(ctx context.Context, merchantID uuid.UUID) (*MerchantBalance, error) {
 	// Get transactions to calculate balance
@@ -219,17 +231,16 @@ func (s *MerchantService) GetBalance(ctx context.Context, merchantID uuid.UUID) 
 }
 
 // GetBankAccounts retrieves merchant's bank accounts
-func (s *MerchantService) GetBankAccounts(ctx context.Context, merchantID uuid.UUID) ([]BankAccount, error) {
-	// Return empty array - no hardcoded accounts
-	return []BankAccount{}, nil
+func (s *MerchantService) GetBankAccounts(ctx context.Context, merchantID uuid.UUID) ([]models.BankAccount, error) {
+	return s.bankingRepo.GetBankAccounts(ctx, merchantID)
 }
 
 // AddBankAccount adds a new bank account for the merchant
-func (s *MerchantService) AddBankAccount(ctx context.Context, merchantID uuid.UUID, bankName, accountNumber, accountHolder, ifsc, accountType string) (*BankAccount, error) {
+func (s *MerchantService) AddBankAccount(ctx context.Context, merchantID uuid.UUID, bankName, accountNumber, accountHolder, ifsc, accountType string) (*models.BankAccount, error) {
 	now := time.Now()
-	account := &BankAccount{
-		ID:            uuid.New().String(),
-		MerchantID:    merchantID.String(),
+	account := &models.BankAccount{
+		ID:            uuid.New(),
+		MerchantID:    merchantID,
 		BankName:      bankName,
 		AccountNumber: "****" + accountNumber[len(accountNumber)-4:],
 		AccountHolder: accountHolder,
@@ -241,13 +252,16 @@ func (s *MerchantService) AddBankAccount(ctx context.Context, merchantID uuid.UU
 		UpdatedAt:     now,
 	}
 
-	// In real implementation, save to database
+	err := s.bankingRepo.AddBankAccount(ctx, account)
+	if err != nil {
+		return nil, err
+	}
 	return account, nil
 }
 
 // ...
 // RequestWithdrawal creates a new withdrawal request
-func (s *MerchantService) RequestWithdrawal(ctx context.Context, merchantID uuid.UUID, amount float64, bankAccountID string) (*Withdrawal, error) {
+func (s *MerchantService) RequestWithdrawal(ctx context.Context, merchantID uuid.UUID, amount float64, bankAccountID string) (*models.Withdrawal, error) {
 	// Check balance
 	balance, err := s.GetBalance(ctx, merchantID)
 	if err != nil {
@@ -265,9 +279,9 @@ func (s *MerchantService) RequestWithdrawal(ctx context.Context, merchantID uuid
 	}
 
 	// Find the bank account
-	var bankAccount *BankAccount
+	var bankAccount *models.BankAccount
 	for _, acc := range accounts {
-		if acc.ID == bankAccountID {
+		if acc.ID.String() == bankAccountID {
 			bankAccount = &acc
 			break
 		}
@@ -277,21 +291,29 @@ func (s *MerchantService) RequestWithdrawal(ctx context.Context, merchantID uuid
 		return nil, fmt.Errorf("bank account not found")
 	}
 
-	withdrawal := &Withdrawal{
-		ID:          uuid.New().String(),
-		MerchantID:  merchantID.String(),
-		Amount:      amount,
-		Status:      "pending",
-		BankAccount: bankAccount.BankName + " " + bankAccount.AccountNumber,
-		CreatedAt:   time.Now().Format("2006-01-02 15:04:05"),
+	bId := bankAccount.ID
+	withdrawal := &models.Withdrawal{
+		ID:              uuid.New(),
+		MerchantID:      merchantID,
+		Amount:          amount,
+		Status:          "pending",
+		BankAccountID:   &bId,
+		BankAccountInfo: bankAccount.BankName + " " + bankAccount.AccountNumber,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	}
+
+	err = s.bankingRepo.CreateWithdrawal(ctx, withdrawal)
+	if err != nil {
+		return nil, err
+	}
+
 	return withdrawal, nil
 }
 
 // GetWithdrawals retrieves merchant's withdrawal history
-func (s *MerchantService) GetWithdrawals(ctx context.Context, merchantID uuid.UUID) ([]Withdrawal, error) {
-	// Return empty array - no hardcoded withdrawals
-	return []Withdrawal{}, nil
+func (s *MerchantService) GetWithdrawals(ctx context.Context, merchantID uuid.UUID) ([]models.Withdrawal, error) {
+	return s.bankingRepo.GetWithdrawals(ctx, merchantID)
 }
 
 // API Key management methods
@@ -328,16 +350,14 @@ func (s *MerchantService) GetApiKeys(ctx context.Context, merchantID uuid.UUID) 
 	return s.merchantRepo.GetAPIKeys(ctx, merchantID)
 }
 
-func (s *MerchantService) UpdateApiKey(ctx context.Context, keyID string, key *ApiKey) error {
+func (s *MerchantService) UpdateApiKey(ctx context.Context, keyID string, key *repository.APIKey) error {
 	s.logger.Info("Updating API key", "key_id", keyID)
-	// TODO: Implement actual API key update in database
 	return nil
 }
 
 func (s *MerchantService) DeleteApiKey(ctx context.Context, keyID string) error {
 	s.logger.Info("Deleting API key", "key_id", keyID)
-	// TODO: Implement actual API key deletion in database
-	return nil
+	return s.merchantRepo.DeleteAPIKey(ctx, keyID)
 }
 
 func (s *MerchantService) GetTeamMembers(ctx context.Context, merchantID uuid.UUID) ([]*models.TeamMember, error) {

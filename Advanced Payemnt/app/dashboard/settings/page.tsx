@@ -22,6 +22,8 @@ export default function SettingsPage() {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const { user } = useAuthStore();
 
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
   // Form states
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -133,7 +135,7 @@ export default function SettingsPage() {
 
   const handleGenerateApiKey = async () => {
     try {
-      const res: any = await merchantsApi.createApiKey({ name: `API Key ${new Date().toLocaleDateString()}`, permissions: [] });
+      const res: any = await merchantsApi.createApiKey({ environment: 'test' });
       setApiKeys([res.data, ...apiKeys]);
       alert('New API key generated successfully!');
     } catch (e) {
@@ -180,17 +182,33 @@ export default function SettingsPage() {
   };
 
   const maskKey = (key: string) => {
+    if (!key) return '••••••••••••••••••••••••';
     const start = key.substring(0, 4);
     const end = key.substring(key.length - 4);
     return `${start}${'•'.repeat(16)}${end}`;
   };
 
+  if (!isMounted) return null;
+
   return (
     <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-foreground mb-2">Settings</h1>
-            <p className="text-muted-foreground">Manage your account and API configurations</p>
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-bold text-foreground">Settings</h1>
+                {user?.kyc_status && (
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    user.kyc_status === 'verified' ? 'bg-emerald-500/20 text-emerald-500' :
+                    user.kyc_status === 'under_review' ? 'bg-amber-500/20 text-amber-500' : 
+                    'bg-slate-500/20 text-slate-500'
+                  }`}>
+                    KYC: {user.kyc_status.replace('_', ' ')}
+                  </span>
+                )}
+              </div>
+              <p className="text-muted-foreground">Manage your account and API configurations</p>
+            </div>
           </div>
 
           <Link
@@ -358,21 +376,21 @@ export default function SettingsPage() {
                       <div key={key.id} className="p-4 border border-border rounded-lg space-y-3">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="font-medium text-foreground">{key.name}</p>
-                            <p className="text-xs text-muted-foreground">Created: {new Date(key.created).toLocaleDateString()}</p>
+                            <p className="font-medium text-foreground">{key.publishable_key}</p>
+                            <p className="text-xs text-muted-foreground">Created: {key.created_at ? new Date(key.created_at).toLocaleDateString() : 'Just now'}</p>
                           </div>
                           <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            key.mode === 'live' 
+                            key.environment === 'live' 
                               ? 'bg-green-500/10 text-green-600' 
                               : 'bg-yellow-500/10 text-yellow-600'
                           }`}>
-                            {key.mode === 'live' ? 'Live' : 'Test'}
+                            {key.environment === 'live' ? 'Live' : 'Test'}
                           </span>
                         </div>
 
                         <div className="flex items-center gap-2 bg-slate-800/50 p-3 rounded">
                           <code className="flex-1 text-sm font-mono text-foreground">
-                            {showSecrets ? key.key : maskKey(key.key)}
+                            {showSecrets ? (key.secret_key || key.publishable_key) : maskKey(key.secret_key || key.publishable_key)}
                           </code>
                           <Button
                             size="sm"
@@ -384,7 +402,7 @@ export default function SettingsPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => navigator.clipboard.writeText(key.key)}
+                            onClick={() => navigator.clipboard.writeText(key.secret_key || key.publishable_key)}
                           >
                             <Copy className="w-4 h-4" />
                           </Button>

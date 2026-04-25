@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"github.com/yourcompany/payment-gateway/internal/domain/models"
 )
 
@@ -355,7 +356,7 @@ func (r *transactionRepository) MarkAsSettled(ctx context.Context, txIDs []uuid.
 	}
 
 	query := `UPDATE transactions SET settlement_id = $1, updated_at = NOW() WHERE id = ANY($2)`
-	_, err := r.db.ExecContext(ctx, query, settlementID, txIDs)
+	_, err := r.db.ExecContext(ctx, query, settlementID, pq.Array(txIDs))
 	return err
 }
 

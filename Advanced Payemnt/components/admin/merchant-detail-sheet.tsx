@@ -57,6 +57,13 @@ export function MerchantDetailSheet({ merchantId, open, onOpenChange, onStatusAp
     ? [m.address_street, m.address_city, m.address_state, m.address_postal_code, m.address_country].filter(Boolean).join(', ')
     : '';
 
+  let kycDocs: any = null;
+  try {
+    kycDocs = m?.kyc_documents ? JSON.parse(m.kyc_documents) : null;
+  } catch (e) {
+    kycDocs = null;
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-lg">
@@ -192,6 +199,38 @@ export function MerchantDetailSheet({ merchantId, open, onOpenChange, onStatusAp
                   <p className="text-sm leading-relaxed">{addrLine}</p>
                 </div>
               ) : null}
+
+              {kycDocs && Object.keys(kycDocs).length > 0 && (
+                <div>
+                  <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-indigo-500">
+                    <Shield className="h-4 w-4" />
+                    Identity & Compliance Vault
+                  </h3>
+                  <div className="grid gap-3">
+                    {kycDocs.aadhaar_number && (
+                      <div className="rounded border bg-indigo-50/50 p-3 dark:bg-indigo-950/20">
+                        <p className="text-xs font-medium text-muted-foreground">Aadhaar (UIDAI)</p>
+                        <p className="mt-1 font-mono text-sm">{kycDocs.aadhaar_number}</p>
+                      </div>
+                    )}
+                    {kycDocs.passport_photo && (
+                      <div className="rounded border bg-indigo-50/50 p-3 dark:bg-indigo-950/20">
+                        <p className="text-xs font-medium text-muted-foreground">Identity Photo Profile</p>
+                        <img src={kycDocs.passport_photo} alt="Passport Photo" className="mt-2 h-24 w-24 rounded-md object-cover ring-2 ring-indigo-500/20" />
+                      </div>
+                    )}
+                    {kycDocs.fingerprint_signature && (
+                      <div className="rounded border bg-indigo-50/50 p-3 dark:bg-indigo-950/20">
+                        <p className="text-xs font-medium text-muted-foreground">Biometric Hardware Signature</p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"></span>
+                          <p className="font-mono text-xs text-emerald-600 dark:text-emerald-400">Verified: {kycDocs.fingerprint_signature}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <Separator />
 

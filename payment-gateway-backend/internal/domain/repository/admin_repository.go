@@ -45,6 +45,7 @@ type AdminMerchantDetail struct {
 	Phone               string `json:"phone" db:"phone"`
 	Status              string `json:"status" db:"status"`
 	KYCStatus           string `json:"kyc_status" db:"kyc_status"`
+	KYCDocuments        string `json:"kyc_documents" db:"kyc_documents"`
 	CreatedAt           string `json:"created_at" db:"created_at"`
 	Description         string `json:"description" db:"description"`
 	Website             string `json:"website" db:"website"`
@@ -210,6 +211,7 @@ func (r *adminRepository) GetMerchantDetail(ctx context.Context, merchantID stri
 			COALESCE(m.phone, '') AS phone,
 			m.status,
 			COALESCE(m.kyc_status, '') AS kyc_status,
+			COALESCE(m.kyc_documents::text, '{}') AS kyc_documents,
 			TO_CHAR(m.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
 			COALESCE(m.description, '') AS description,
 			COALESCE(m.website, '') AS website,
@@ -236,6 +238,10 @@ func (r *adminRepository) GetMerchantDetail(ctx context.Context, merchantID stri
 }
 
 func (r *adminRepository) UpdateMerchantStatus(ctx context.Context, merchantID string, status string) error {
+	if status == "approved" {
+		_, err := r.db.ExecContext(ctx, `UPDATE merchants SET status = $1, kyc_status = 'verified' WHERE id = $2`, status, merchantID)
+		return err
+	}
 	_, err := r.db.ExecContext(ctx, `UPDATE merchants SET status = $1 WHERE id = $2`, status, merchantID)
 	return err
 }

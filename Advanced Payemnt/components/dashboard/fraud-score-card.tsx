@@ -16,9 +16,10 @@ export function FraudScoreCard({ recentTransactions = [] }: FraudScoreCardProps)
   const validScores = recentTransactions.map(t => t.fraud_score).filter(s => s !== undefined) as number[];
   const score = validScores.length > 0 
     ? Math.round(validScores.reduce((acc,s) => acc + s, 0) / validScores.length)
-    : 12; // fallback if no scores available
+    : 0; // exactly 0 if no scores available
     
   const getLabel = () => {
+    if (validScores.length === 0) return 'Pending Live Data';
     if (score <= 30) return 'Low Risk Average';
     if (score <= 60) return 'Med Risk Average';
     return 'High Risk Warning';

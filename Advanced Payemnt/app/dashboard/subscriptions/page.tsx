@@ -26,6 +26,7 @@ import {
   Loader2,
   RefreshCw,
   Ban,
+  Plus,
 } from 'lucide-react';
 import { formatCurrency, formatNumber, formatDate } from '@/lib/formatting';
 import {
@@ -104,6 +105,14 @@ export default function SubscriptionsDashboardPage() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // Create Plan state
+  const [createPlanOpen, setCreatePlanOpen] = useState(false);
+  const [planName, setPlanName] = useState('');
+  const [planAmount, setPlanAmount] = useState('');
+  const [planIntervalType, setPlanIntervalType] = useState('monthly');
+  const [planIntervalCount, setPlanIntervalCount] = useState('1');
+  const [creatingPlan, setCreatingPlan] = useState(false);
 
   const load = useCallback(async () => {
     setError('');
@@ -205,6 +214,37 @@ export default function SubscriptionsDashboardPage() {
     }
   };
 
+  const handleCreatePlan = async () => {
+    if (!planName.trim() || !planAmount) {
+      toast.error('Plan name and amount are required');
+      return;
+    }
+    setCreatingPlan(true);
+    try {
+      await subscriptionsApi.createPlan({
+        name: planName.trim(),
+        amount: Number(planAmount),
+        currency: 'INR',
+        interval_type: planIntervalType,
+        interval_count: Number(planIntervalCount) || 1,
+      });
+      toast.success('Billing plan created successfully');
+      setCreatePlanOpen(false);
+      setPlanName('');
+      setPlanAmount('');
+      setPlanIntervalType('monthly');
+      setPlanIntervalCount('1');
+      await load(); // Reload to fetch the newly created plan
+    } catch (e: unknown) {
+      const msg = e && typeof e === 'object' && 'response' in e
+          ? String((e as any).response?.data?.error ?? 'Create failed')
+          : 'Create plan failed';
+      toast.error(msg);
+    } finally {
+      setCreatingPlan(false);
+    }
+  };
+
   const handleCancel = async (id: string) => {
     if (!window.confirm('Cancel this subscription? This cannot be undone.')) return;
     try {
@@ -239,6 +279,10 @@ export default function SubscriptionsDashboardPage() {
               <Settings className="h-4 w-4" />
               Billing settings
             </Link>
+          </Button>
+          <Button variant="secondary" size="sm" className="gap-2" onClick={() => setCreatePlanOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Create plan
           </Button>
           <Button size="sm" className="gap-2" onClick={() => setCreateOpen(true)} disabled={plans.length === 0}>
             <Repeat className="h-4 w-4" />
@@ -324,6 +368,56 @@ export default function SubscriptionsDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* PLAN ROSTER TABLE - FOR VISIBILITY OF CREATED PLANS */}
+      <Card className="border-border/80 shadow-sm">
+        <CardHeader className="border-b border-border/60 pb-4">
+          <CardTitle className="text-lg">Billing Plans configuration</CardTitle>
+          <CardDescription>Your engine logic for recurring charges.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/40 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <th className="px-6 py-3">Plan Name / ID</th>
+                  <th className="px-6 py-3">Logic Cycle</th>
+                  <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3 text-right">Debit Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {plans.map((p) => (
+                  <tr key={p.id} className="transition-colors hover:bg-muted/30">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-foreground">{p.name || 'Custom Plan'}</div>
+                      <div className="font-mono text-xs text-muted-foreground">{p.id}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <Badge variant="outline" className="font-normal capitalize bg-primary/5 text-primary border-primary/20">
+                        {cycleSuffix(p.interval_type, p.interval_count)}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4">
+                      <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 border-none font-medium">
+                        Active API Ready
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 text-right font-medium text-foreground">
+                      {formatCurrency(num(p.amount), p.currency || 'INR')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!loading && plans.length === 0 && (
+            <div className="px-6 py-8 text-center text-sm text-muted-foreground">
+              No logic plans formulated yet. Use <strong className="text-foreground">Create plan</strong>.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="border-border/80 shadow-sm">
         <CardHeader className="border-b border-border/60 pb-4">
@@ -448,6 +542,54 @@ export default function SubscriptionsDashboardPage() {
             </Button>
             <Button type="button" onClick={() => void handleCreate()} disabled={creating || !planId}>
               {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CREATE PLAN MODAL */}
+      <Dialog open={createPlanOpen} onOpenChange={setCreatePlanOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>New Billing Plan</DialogTitle>
+            <DialogDescription>Define a recurring logic schema for your customers.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="plan-name">Plan Name</Label>
+              <Input id="plan-name" value={planName} onChange={(e) => setPlanName(e.target.value)} placeholder="e.g. Pro Monthly" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="plan-amount">Amount (INR)</Label>
+              <Input id="plan-amount" type="number" value={planAmount} onChange={(e) => setPlanAmount(e.target.value)} placeholder="e.g. 4999" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="plan-interval">Interval</Label>
+                <select
+                  id="plan-interval"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={planIntervalType}
+                  onChange={(e) => setPlanIntervalType(e.target.value)}
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="plan-count">Interval Count</Label>
+                <Input id="plan-count" type="number" min="1" value={planIntervalCount} onChange={(e) => setPlanIntervalCount(e.target.value)} placeholder="1" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
+            <Button type="button" variant="outline" onClick={() => setCreatePlanOpen(false)}>
+              Close
+            </Button>
+            <Button type="button" onClick={() => void handleCreatePlan()} disabled={creatingPlan || !planName || !planAmount}>
+              {creatingPlan ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Deploy Plan'}
             </Button>
           </DialogFooter>
         </DialogContent>

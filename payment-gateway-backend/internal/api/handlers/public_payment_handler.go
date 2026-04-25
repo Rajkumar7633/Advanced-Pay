@@ -8,17 +8,19 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/yourcompany/payment-gateway/internal/domain/models"
+	"github.com/yourcompany/payment-gateway/internal/domain/repository"
 	"github.com/yourcompany/payment-gateway/internal/domain/service"
 	"github.com/yourcompany/payment-gateway/internal/infrastructure/cache"
 )
 
 type PublicPaymentHandler struct {
-	payments *service.PaymentService
-	cache    cache.Client
+	payments  *service.PaymentService
+	adminRepo repository.AdminRepository
+	cache     cache.Client
 }
 
-func NewPublicPaymentHandler(payments *service.PaymentService, cacheClient cache.Client) *PublicPaymentHandler {
-	return &PublicPaymentHandler{payments: payments, cache: cacheClient}
+func NewPublicPaymentHandler(payments *service.PaymentService, adminRepo repository.AdminRepository, cacheClient cache.Client) *PublicPaymentHandler {
+	return &PublicPaymentHandler{payments: payments, adminRepo: adminRepo, cache: cacheClient}
 }
 
 type checkoutSessionPayloadV1 struct {
@@ -32,6 +34,13 @@ func (h *PublicPaymentHandler) InitiatePayment(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authentication context"})
 		return
+	}
+
+	if h.adminRepo != nil {
+		if settings, err := h.adminRepo.GetSettings(c.Request.Context()); err == nil && settings.MaintenanceMode {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway is currently under maintenance"})
+			return
+		}
 	}
 
 	var req models.CreatePaymentRequest
@@ -60,6 +69,13 @@ func (h *PublicPaymentHandler) CreatePayment(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
 		return
+	}
+
+	if h.adminRepo != nil {
+		if settings, err := h.adminRepo.GetSettings(c.Request.Context()); err == nil && settings.MaintenanceMode {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Payment gateway is currently under maintenance"})
+			return
+		}
 	}
 
 	var req models.CreatePaymentRequest

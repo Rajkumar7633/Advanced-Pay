@@ -74,6 +74,7 @@ export const paymentsApi = {
 // Merchant APIs
 export const merchantsApi = {
   getProfile: () => api.get('/merchants/me'),
+  getBilling: () => api.get('/merchants/me/billing'),
   updateProfile: (body: any) => api.put('/merchants/me', body),
   updatePassword: (body: any) => api.put('/merchants/me/password', body),
   getStats: () => api.get('/merchants/stats'),
@@ -104,7 +105,7 @@ export const merchantsApi = {
   getWithdrawals: () => api.get('/withdrawals'),
   // API Keys APIs
   getApiKeys: () => api.get('/api-keys'),
-  createApiKey: (body: { name: string; permissions: string[] }) =>
+  createApiKey: (body: { environment: 'test' | 'live' }) =>
     api.post('/api-keys', body),
   regenerateApiKey: (id: string) =>
     api.put(`/api-keys/${id}`, { name: `Regenerated Key ${new Date().toLocaleDateString()}` }),
@@ -144,6 +145,8 @@ export const subscriptionsApi = {
   create: (body: { plan_id: string; customer_email: string; customer_phone?: string }) =>
     api.post<{ data: unknown; auth_url?: string; message?: string }>('/subscriptions', body),
   cancel: (id: string) => api.delete(`/subscriptions/${id}`),
+  createPlan: (body: { name: string; description?: string; amount: number; currency: string; interval_type: string; interval_count: number }) =>
+    api.post<{ data: SubscriptionPlanDTO }>('/plans', body),
 };
 
 // Webhook APIs

@@ -41,6 +41,8 @@ export const useAuthStore = create<AuthState>((set) => ({
           name: merchant?.data?.business_name || merchant?.businessName || 'Merchant',
           role: 'merchant' as const,
           createdAt: merchant?.data?.created_at || merchant?.createdAt || new Date().toISOString(),
+          status: merchant?.data?.status || merchant?.status || 'unknown',
+          kyc_status: merchant?.data?.kyc_status || merchant?.kyc_status || 'pending',
         };
         set({ user });
     } catch {

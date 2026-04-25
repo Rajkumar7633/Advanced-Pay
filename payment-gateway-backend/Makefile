@@ -7,7 +7,7 @@ run:
 	go run cmd/api/main.go
 
 dev:
-	air
+	$$(go env GOPATH)/bin/air
 
 test:
 	go test -v ./...

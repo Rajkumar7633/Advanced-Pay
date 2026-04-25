@@ -6,6 +6,8 @@ export interface User {
   name: string;
   role: 'admin' | 'merchant' | 'customer';
   createdAt: string;
+  status?: string;
+  kyc_status?: string;
 }
 
 export interface Merchant {

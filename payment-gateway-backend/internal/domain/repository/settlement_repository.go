@@ -23,7 +23,7 @@ func (r *settlementRepository) Create(ctx context.Context, settlement *models.Se
 		INSERT INTO settlements (
 			id, merchant_id, settlement_date, total_amount, total_transactions,
 			fees, tax, net_amount, status, utr_number, settled_at, created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`
 
 	_, err := r.db.ExecContext(ctx, query,
 		settlement.ID,

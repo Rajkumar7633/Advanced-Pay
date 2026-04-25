@@ -14,7 +14,7 @@ type SubscriptionRepository interface {
 	CreatePlan(ctx context.Context, plan *models.SubscriptionPlan) error
 	GetPlan(ctx context.Context, merchantID, planID uuid.UUID) (*models.SubscriptionPlan, error)
 	ListPlans(ctx context.Context, merchantID uuid.UUID) ([]*models.SubscriptionPlan, error)
-	
+
 	CreateSubscription(ctx context.Context, sub *models.Subscription) error
 	GetSubscription(ctx context.Context, merchantID, subID uuid.UUID) (*models.Subscription, error)
 	UpdateSubscription(ctx context.Context, sub *models.Subscription) error
@@ -58,9 +58,11 @@ func (r *subscriptionRepository) ListPlans(ctx context.Context, merchantID uuid.
 }
 
 func (r *subscriptionRepository) CreateSubscription(ctx context.Context, sub *models.Subscription) error {
-	var metaJSON []byte
+	metaStr := "{}"
 	if sub.Metadata != nil {
-		metaJSON, _ = json.Marshal(sub.Metadata)
+		if metaBytes, err := json.Marshal(sub.Metadata); err == nil && len(metaBytes) > 0 {
+			metaStr = string(metaBytes)
+		}
 	}
 
 	query := `
@@ -71,7 +73,7 @@ func (r *subscriptionRepository) CreateSubscription(ctx context.Context, sub *mo
 	_, err := r.db.ExecContext(ctx, query,
 		sub.ID, sub.MerchantID, sub.PlanID, sub.CustomerEmail, sub.CustomerPhone, sub.Status,
 		sub.CurrentPeriodStart, sub.CurrentPeriodEnd, sub.NextBillingDate, sub.CanceledAt,
-		sub.UPIMandateID, sub.CardMandateID, string(metaJSON), sub.CreatedAt, sub.UpdatedAt,
+		sub.UPIMandateID, sub.CardMandateID, metaStr, sub.CreatedAt, sub.UpdatedAt,
 	)
 	return err
 }
@@ -95,9 +97,11 @@ func (r *subscriptionRepository) GetSubscription(ctx context.Context, merchantID
 }
 
 func (r *subscriptionRepository) UpdateSubscription(ctx context.Context, sub *models.Subscription) error {
-	var metaJSON []byte
+	metaStr := "{}"
 	if sub.Metadata != nil {
-		metaJSON, _ = json.Marshal(sub.Metadata)
+		if metaBytes, err := json.Marshal(sub.Metadata); err == nil && len(metaBytes) > 0 {
+			metaStr = string(metaBytes)
+		}
 	}
 
 	query := `
@@ -110,7 +114,7 @@ func (r *subscriptionRepository) UpdateSubscription(ctx context.Context, sub *mo
 	_, err := r.db.ExecContext(ctx, query,
 		sub.Status, sub.CurrentPeriodStart, sub.CurrentPeriodEnd,
 		sub.NextBillingDate, sub.CanceledAt, sub.UPIMandateID,
-		sub.CardMandateID, string(metaJSON), sub.UpdatedAt,
+		sub.CardMandateID, metaStr, sub.UpdatedAt,
 		sub.ID, sub.MerchantID,
 	)
 	return err

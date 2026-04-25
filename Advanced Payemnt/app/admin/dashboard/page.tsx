@@ -99,7 +99,7 @@ export default function AdminDashboardPage() {
     let ws: WebSocket;
     if (typeof window !== 'undefined') {
       // Connecting as `superadmin` routes all global traffic clones to this listener
-      ws = new WebSocket(`ws://localhost:8080/api/v1/ws/pulse?token=superadmin`);
+      ws = new WebSocket(`ws://localhost:8081/api/v1/ws/pulse?token=superadmin`);
       
       ws.onmessage = (event) => {
         try {

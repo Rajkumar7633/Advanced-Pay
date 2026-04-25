@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   Building2,
   CheckCircle2,
@@ -29,9 +30,11 @@ type PayMethod = 'upi' | 'card' | 'netbanking' | 'wallet' | 'cross_border_wallet
 const INR_USD = 83.2;
 
 export function AdvancedGlobalCheckout() {
+  const searchParams = useSearchParams();
+
   const [region, setRegion] = useState<Region>('IN');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('+91');
+  const [phone, setPhone] = useState('+91 ');
   const [gstin, setGstin] = useState('');
   const [consent, setConsent] = useState(false);
   const [method, setMethod] = useState<PayMethod>('upi');
@@ -39,7 +42,9 @@ export function AdvancedGlobalCheckout() {
   const [done, setDone] = useState(false);
   const [err, setErr] = useState('');
 
-  const baseInr = 4999;
+  const paramAmount = searchParams.get('amount');
+  const itemName = searchParams.get('item') || 'Custom Invoice';
+  const baseInr = paramAmount ? Number(paramAmount) : 5000;
   const subtotalInr = baseInr;
   const gstRate = region === 'IN' ? 0.18 : 0;
   const gstAmount = Math.round(subtotalInr * gstRate * 100) / 100;
@@ -142,19 +147,20 @@ export function AdvancedGlobalCheckout() {
     <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[1fr_340px]">
       <div className="space-y-6">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" className="gap-1 font-semibold">
-            <Sparkles className="h-3 w-3" />
-            First-party India + global
+          <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 gap-1 font-semibold uppercase tracking-widest px-3 py-1">
+            <Sparkles className="h-4 w-4" />
+            Global Checkout
           </Badge>
-          <span className="text-xs text-muted-foreground">REQUIREMENTS_MASTER: hosted page + multi-rail</span>
+          <span className="text-xs text-white/40 font-mono">ENCRYPTED_SESSION: hosted page + multi-rail</span>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Market</CardTitle>
-            <CardDescription>Switch routing, tax display, and recommended payment method.</CardDescription>
+        <Card className="border-white/10 bg-white/[0.02] backdrop-blur-3xl shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="relative">
+            <CardTitle className="text-xl font-bold text-white tracking-tight">Market</CardTitle>
+            <CardDescription className="text-white/50 text-sm">Switch routing, tax display, and compliance mandates dynamically.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative">
             <RadioGroup
               value={region}
               onValueChange={(v) => {
@@ -164,33 +170,37 @@ export function AdvancedGlobalCheckout() {
               className="grid gap-3 sm:grid-cols-2"
             >
               <label
-                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
-                  region === 'IN' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'
+                className={`flex cursor-pointer items-start gap-4 rounded-2xl border p-5 transition-all duration-300 ${
+                  region === 'IN' ? 'border-blue-500 bg-blue-500/10 shadow-[0_0_20px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/30' : 'border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20'
                 }`}
               >
                 <RadioGroupItem value="IN" id="in" className="mt-1" />
                 <div>
-                  <div className="flex items-center gap-2 font-semibold">
-                    <IndianRupee className="h-4 w-4 text-primary" />
-                    India (domestic)
+                  <div className="flex items-center gap-2 font-bold text-white tracking-wide">
+                    <div className="bg-blue-500/20 p-1.5 rounded-md">
+                      <IndianRupee className="h-4 w-4 text-blue-400" />
+                    </div>
+                    India (Domestic)
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-2 text-xs text-white/50 leading-relaxed">
                     GST breakdown, UPI / RuPay priority, DPDP consent copy.
                   </p>
                 </div>
               </label>
               <label
-                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
-                  region === 'INTL' ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'
+                className={`flex cursor-pointer items-start gap-4 rounded-2xl border p-5 transition-all duration-300 ${
+                  region === 'INTL' ? 'border-indigo-500 bg-indigo-500/10 shadow-[0_0_20px_rgba(99,102,241,0.15)] ring-1 ring-indigo-500/30' : 'border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20'
                 }`}
               >
                 <RadioGroupItem value="INTL" id="intl" className="mt-1" />
                 <div>
-                  <div className="flex items-center gap-2 font-semibold">
-                    <Globe2 className="h-4 w-4 text-primary" />
+                  <div className="flex items-center gap-2 font-bold text-white tracking-wide">
+                    <div className="bg-indigo-500/20 p-1.5 rounded-md">
+                      <Globe2 className="h-4 w-4 text-indigo-400" />
+                    </div>
                     Rest of world
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-2 text-xs text-white/50 leading-relaxed">
                     FX estimate for display — settlement stays on your Advanced Pay rules.
                   </p>
                 </div>
@@ -199,27 +209,30 @@ export function AdvancedGlobalCheckout() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Customer</CardTitle>
-            <CardDescription>Minimal fields; GSTIN optional for B2B in India.</CardDescription>
+        <Card className="border-white/10 bg-white/[0.02] backdrop-blur-3xl shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-bl from-green-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="relative">
+            <CardTitle className="text-xl font-bold text-white tracking-tight">Customer Intelligence</CardTitle>
+            <CardDescription className="text-white/50 text-sm">Secure compliance parameters dynamically fetched for identity.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
+          <CardContent className="grid gap-5 sm:grid-cols-2 relative">
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="em">Email</Label>
+              <Label htmlFor="em" className="text-white/70">Email Address</Label>
               <Input
                 id="em"
                 type="email"
-                placeholder="you@company.com"
+                className="bg-white/5 border-white/10 text-white placeholder:text-white/20 focus:border-blue-500 focus:ring-blue-500/20"
+                placeholder="Secure email for invoice"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ph">Phone</Label>
+              <Label htmlFor="ph" className="text-white/70">Phone Number</Label>
               <Input
                 id="ph"
+                className="bg-white/5 border-white/10 text-white placeholder:text-white/20 focus:border-blue-500 focus:ring-blue-500/20"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder={region === 'IN' ? '+91 98765 43210' : '+1 …'}
@@ -227,9 +240,10 @@ export function AdvancedGlobalCheckout() {
             </div>
             {region === 'IN' && (
               <div className="space-y-2">
-                <Label htmlFor="gst">GSTIN (optional)</Label>
+                <Label htmlFor="gst" className="text-white/70">GSTIN Tracker <span className="text-white/30 text-xs">(optional)</span></Label>
                 <Input
                   id="gst"
+                  className="bg-white/5 border-white/10 text-white placeholder:text-white/20 focus:border-blue-500 focus:ring-blue-500/20"
                   value={gstin}
                   onChange={(e) => setGstin(e.target.value.toUpperCase())}
                   placeholder="22AAAAA0000A1Z5"
@@ -240,15 +254,16 @@ export function AdvancedGlobalCheckout() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Smart method</CardTitle>
-            <CardDescription>
-              Suggested: <strong className="text-foreground">{recommended.toUpperCase()}</strong> for your region.
+        <Card className="border-white/10 bg-white/[0.02] backdrop-blur-3xl shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-t from-violet-500/5 to-transparent pointer-events-none" />
+          <CardHeader className="relative">
+            <CardTitle className="text-xl font-bold text-white tracking-tight">Smart Routing Edge</CardTitle>
+            <CardDescription className="text-white/50 text-sm">
+              AI Suggested: <strong className="text-white bg-white/10 px-2 py-0.5 rounded-md font-mono text-xs">{recommended.toUpperCase()}</strong> dynamically routed for maximum success rate.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid gap-2 sm:grid-cols-2">
+          <CardContent className="space-y-4 relative">
+            <div className="grid gap-3 sm:grid-cols-2">
               {(
                 [
                   {
@@ -300,21 +315,21 @@ export function AdvancedGlobalCheckout() {
                       key={m.id}
                       type="button"
                       onClick={() => setMethod(m.id)}
-                      className={`flex items-start gap-3 rounded-xl border p-3 text-left transition-colors ${
-                        active ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'
+                      className={`flex items-start gap-4 rounded-xl border p-4 text-left transition-all duration-300 ${
+                        active ? 'border-primary bg-primary/10 ring-1 ring-primary/30 shadow-[0_0_15px_rgba(var(--primary),0.2)]' : 'border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 hover:-translate-y-0.5'
                       }`}
                     >
-                      <Icon className={`mt-0.5 h-5 w-5 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <Icon className={`mt-0.5 h-6 w-6 ${active ? 'text-primary drop-shadow-[0_0_5px_rgba(var(--primary),0.5)]' : 'text-white/40'}`} />
                       <div>
-                        <div className="flex items-center gap-2 font-semibold">
+                        <div className="flex items-center gap-2 font-bold text-white tracking-wide">
                           {m.label}
                           {recommended === m.id && (
-                            <Badge variant="outline" className="text-[10px]">
+                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] uppercase font-bold tracking-widest px-2 py-0">
                               Best success
                             </Badge>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">{m.sub}</p>
+                        <p className="text-xs text-white/50 mt-1">{m.sub}</p>
                       </div>
                     </button>
                   );
@@ -339,13 +354,12 @@ export function AdvancedGlobalCheckout() {
           </CardContent>
         </Card>
 
-        <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/20 p-4">
-          <Checkbox id="c" checked={consent} onCheckedChange={(v) => setConsent(v === true)} />
-          <label htmlFor="c" className="cursor-pointer text-sm leading-snug text-muted-foreground">
+        <div className="flex items-center gap-4 rounded-xl border border-blue-500/20 bg-blue-500/5 p-5 shadow-[0_0_20px_rgba(59,130,246,0.05)] backdrop-blur-md">
+          <Checkbox id="c" className="border-blue-500/50 data-[state=checked]:bg-blue-600 data-[state=checked]:text-white mb-auto" checked={consent} onCheckedChange={(v) => setConsent(v === true)} />
+          <label htmlFor="c" className="cursor-pointer text-[13px] leading-relaxed text-blue-100/70 select-none">
             {region === 'IN' ? (
               <>
-                I agree to the processing of my personal data for this payment under applicable Indian law, including the
-                Digital Personal Data Protection Act, and to receive transaction communications.
+                I securely authorize the dynamic processing of my identity tokens under the jurisdiction of the <strong className="text-blue-300">Digital Personal Data Protection Act</strong>, enabling zero-trust transaction communications.
               </>
             ) : (
               <>
@@ -358,30 +372,35 @@ export function AdvancedGlobalCheckout() {
 
         {err && <p className="text-sm font-medium text-destructive">{err}</p>}
 
-        <Button size="lg" className="w-full gap-2 sm:w-auto" onClick={handlePay} disabled={busy}>
-          <Lock className="h-4 w-4" />
-          {busy ? 'Securing…' : `Pay ${formatCurrency(display.total, display.currency)}`}
+        <Button size="lg" className="w-full gap-3 sm:w-auto bg-blue-600 hover:bg-blue-500 text-white font-bold tracking-wider text-sm rounded-xl shadow-[0_0_30px_rgba(37,99,235,0.4)] transition-all hover:scale-105 active:scale-95" onClick={handlePay} disabled={busy || baseInr === 0}>
+          <Lock className="h-4 w-4 drop-shadow-md" />
+          {busy ? 'Establishing secure tunnel…' : baseInr === 0 ? 'Invalid Amount' : `Confirm Payment — ${formatCurrency(display.total, display.currency)}`}
         </Button>
       </div>
 
-      <div className="space-y-4">
-        <Card className="sticky top-4 border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">
-          <CardHeader>
-            <CardTitle className="text-base">Order summary</CardTitle>
-            <CardDescription>{display.headline}</CardDescription>
+      <div className="space-y-5">
+        <Card className="sticky top-6 border-white/10 bg-white/[0.02] backdrop-blur-3xl shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
+          <CardHeader className="pb-4">
+            <CardTitle className="text-sm uppercase tracking-widest text-white/50 font-bold">Ledger Overview</CardTitle>
+            <CardDescription className="text-white text-lg font-bold tracking-tight">{display.headline}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Advanced Pay Pro</span>
-              <span className="font-medium">{formatCurrency(display.subtotal, display.currency)}</span>
+          <CardContent className="space-y-4">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-white/60 font-medium">{itemName}</span>
+              <span className="font-bold text-white">{formatCurrency(display.subtotal, display.currency)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">{display.taxLabel}</span>
-              <span className="font-medium">{formatCurrency(display.tax, display.currency)}</span>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-white/60 font-medium">{display.taxLabel}</span>
+              <span className="font-bold text-white">{formatCurrency(display.tax, display.currency)}</span>
             </div>
-            <div className="border-t pt-3 flex justify-between text-base font-bold">
-              <span>Total</span>
-              <span>{formatCurrency(display.total, display.currency)}</span>
+            <div className="border-t border-white/10 pt-4 mt-2 flex justify-between items-end">
+              <div>
+                <span className="block text-[11px] uppercase tracking-widest text-white/40 mb-1 font-bold">Total Allocation</span>
+                <span className="text-3xl font-black text-white bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">
+                  {formatCurrency(display.total, display.currency)}
+                </span>
+              </div>
             </div>
             {region === 'INTL' && (
               <p className="text-[11px] text-muted-foreground">
@@ -389,7 +408,7 @@ export function AdvancedGlobalCheckout() {
                 multi-currency is enabled in admin.
               </p>
             )}
-            <div className="flex flex-wrap gap-1.5 pt-2">
+            <div className="flex flex-wrap gap-1.5 pt-2 mb-6">
               {region === 'IN' ? (
                 <>
                   <Badge variant="outline">UPI</Badge>
@@ -404,6 +423,32 @@ export function AdvancedGlobalCheckout() {
                 </>
               )}
             </div>
+
+            {err && (
+              <div className="rounded-md bg-red-500/10 border border-red-500/20 p-3 mb-4 text-xs text-red-500">
+                {err}
+              </div>
+            )}
+
+            <Button 
+              className="w-full relative shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:shadow-[0_0_30px_rgba(59,130,246,0.5)] transition-all font-bold group"
+              size="lg"
+              disabled={busy}
+              onClick={handlePay}
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-md" />
+              {busy ? (
+                <span className="relative flex items-center justify-center gap-2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                  Routing via edge...
+                </span>
+              ) : (
+                <span className="relative flex items-center justify-between w-full px-2">
+                  <span>Pay securely</span>
+                  <Lock className="w-4 h-4 opacity-70 group-hover:opacity-100 transition-opacity" />
+                </span>
+              )}
+            </Button>
           </CardContent>
         </Card>
       </div>

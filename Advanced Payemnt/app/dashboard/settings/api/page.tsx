@@ -10,13 +10,10 @@ import { merchantsApi } from '@/lib/api';
 
 interface ApiKey {
   id: string;
-  name: string;
-  key: string;
-  mode: 'live' | 'test';
-  created: string;
-  last_used?: string;
-  usage_count?: number;
-  permissions: string[];
+  publishable_key: string;
+  secret_key?: string;
+  environment: 'live' | 'test';
+  created_at: string;
 }
 
 export default function ApiKeysPage() {
@@ -96,6 +93,7 @@ export default function ApiKeysPage() {
   };
 
   const maskKey = (key: string) => {
+    if (!key) return '••••••••••••••••••••••••';
     const start = key.substring(0, 4);
     const end = key.substring(key.length - 4);
     return `${start}${'•'.repeat(16)}${end}`;
@@ -200,21 +198,21 @@ export default function ApiKeysPage() {
                   <div key={key.id} className="p-4 border border-border rounded-lg space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-foreground">{key.name}</p>
-                        <p className="text-xs text-muted-foreground">Created: {new Date(key.created).toLocaleDateString()}</p>
+                        <p className="font-medium text-foreground">{key.publishable_key}</p>
+                        <p className="text-xs text-muted-foreground">Created: {key.created_at ? new Date(key.created_at).toLocaleDateString() : 'Just now'}</p>
                       </div>
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        key.mode === 'live' 
+                        key.environment === 'live' 
                           ? 'bg-green-500/10 text-green-600' 
                           : 'bg-yellow-500/10 text-yellow-600'
                       }`}>
-                        {key.mode === 'live' ? 'Live' : 'Test'}
+                        {key.environment === 'live' ? 'Live' : 'Test'}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2 bg-slate-800/50 p-3 rounded">
                       <code className="flex-1 text-sm font-mono text-foreground">
-                        {showSecrets[key.id] ? key.key : maskKey(key.key)}
+                        {showSecrets[key.id] ? (key.secret_key || key.publishable_key) : maskKey(key.secret_key || key.publishable_key)}
                       </code>
                       <Button
                         size="sm"
@@ -226,17 +224,13 @@ export default function ApiKeysPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => copyToClipboard(key.key)}
+                        onClick={() => copyToClipboard(key.secret_key || key.publishable_key)}
                       >
                         <Copy className="w-4 h-4" />
                       </Button>
                     </div>
 
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => handleRegenerateKey(key.id)}>
-                        <RefreshCw className="w-4 h-4 mr-2" />
-                        Regenerate
-                      </Button>
                       <Button size="sm" variant="outline" className="text-destructive" onClick={() => handleRevokeKey(key.id)}>
                         Revoke
                       </Button>

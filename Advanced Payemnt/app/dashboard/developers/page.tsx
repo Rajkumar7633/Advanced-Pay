@@ -1,302 +1,313 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import React, { useState, useEffect, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Key, Terminal, Code, Activity, Webhook, EyeOff, Eye, RefreshCw, Copy, Plus, Server, CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Terminal, Key, Code, Webhook, Play, Loader2, Copy, Trash2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/lib/store/auth';
 import { api } from '@/lib/api';
 
-interface ApiKey {
-  id: string;
-  environment: string;
-  publishable_key: string;
-  secret_key?: string; // Only strictly returns from backend on genesis creation
-  created_at: string;
+// Types
+interface TerminalLog {
+   id: string;
+   timestamp: string;
+   type: 'info' | 'request' | 'response' | 'error' | 'success';
+   source: 'system' | 'api' | 'webhook';
+   message: string;
+   payload?: any;
 }
 
-interface WebhookEndpoint {
-  id: string;
-  url: string;
-  events: string[];
-  is_active: boolean;
-  secret: string;
-}
-
-interface WebhookDeliveryEvent {
-  id: string;
-  event_type: string;
-  transaction_id?: string;
-  payload: any;
-  status: string;
-  attempts: number;
-  created_at: string;
-}
-
-export default function DeveloperWorkstation() {
-  const [keys, setKeys] = useState<ApiKey[]>([]);
-  const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
-  const [webhookEvents, setWebhookEvents] = useState<WebhookDeliveryEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
-  const [showSecret, setShowSecret] = useState<Record<string, boolean>>({});
+export default function DeveloperStudio() {
+  const [activeTab, setActiveTab] = useState('keys');
+  const [keys, setKeys] = useState<any[]>([]);
+  const [webhooks, setWebhooks] = useState<any[]>([]);
+  const [webhookEvents, setWebhookEvents] = useState<any[]>([]);
+  const [logs, setLogs] = useState<TerminalLog[]>([
+     { id: 'boot', timestamp: new Date().toISOString(), type: 'info', source: 'system', message: 'Advanced Pay IDE Output Initialized...' }
+  ]);
+  const [newWebhookUrl, setNewWebhookUrl] = useState('');
+  const [isFiring, setIsFiring] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   
-  const { token } = useAuthStore();
+  // Data loading
+  useEffect(() => {
+     fetchDeveloperData();
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-scroll terminal
+  useEffect(() => {
+     if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+     }
+  }, [logs]);
+
+  const addLog = (type: TerminalLog['type'], source: TerminalLog['source'], message: string, payload?: any) => {
+     setLogs(prev => [...prev, {
+        id: Math.random().toString(36).substr(2, 9),
+        timestamp: new Date().toISOString(),
+        type, source, message, payload
+     }].slice(-50)); // Keep last 50 logs
+  };
 
   const fetchDeveloperData = async () => {
     try {
-      setLoading(true);
       const [keysRes, hooksRes, eventsRes] = await Promise.all([
-        api.get('/api-keys'),
-        api.get('/webhooks'),
-        api.get('/webhooks/events?limit=25')
+         api.get('/api-keys'),
+         api.get('/webhooks'),
+         api.get('/webhooks/events')
       ]);
       setKeys(keysRes.data || []);
       setWebhooks(hooksRes.data?.data || hooksRes.data || []);
       setWebhookEvents(eventsRes.data?.data || eventsRes.data || []);
-    } catch (e) {
-      toast.error('Failed to load SDK resources');
-    } finally {
-      setLoading(false);
+      addLog('success', 'system', `Pulled ${keysRes.data?.length || 0} active keys and mapped backend structure.`);
+    } catch {
+      addLog('error', 'system', 'Failed to synchronize with HSM vault.');
     }
   };
 
-  useEffect(() => {
-    fetchDeveloperData();
-  }, []);
+  const handleCreateWebhook = async () => {
+     if (!newWebhookUrl) return;
+     try {
+        addLog('request', 'api', `POST /v1/webhooks {"url": "${newWebhookUrl}"}`);
+        await api.post('/webhooks', { url: newWebhookUrl, events: ['payment.succeeded', 'payment.failed'] });
+        addLog('success', 'api', `200 OK: Webhook endpoint registered`);
+        setNewWebhookUrl('');
+        fetchDeveloperData();
+     } catch {
+        addLog('error', 'api', '500 Internal Server Error: Registration failed');
+     }
+  };
 
   const handleGenerateKey = async (env: 'live' | 'test') => {
     try {
+      addLog('request', 'api', `POST /v1/api_keys {"environment": "${env}"}`);
       const res = await api.post('/api-keys', { environment: env });
-      toast.success(`Platform API ${env} key generated. Save the secret immediately!`);
-      // Update keys with the new key (which contains the temporary raw secret)
       setKeys(prev => [res.data.data, ...prev]);
-      setShowSecret(prev => ({ ...prev, [res.data.data.id]: true }));
+      toast.success('Key generated.');
+      addLog('success', 'api', `200 OK: Generated ${env} keyset [${res.data.data.id}]`);
     } catch {
-      toast.error('Key generation failure');
+      addLog('error', 'api', '500 Internal Server Error: Generation rejected.');
     }
   };
 
-  const handleCopy = (text?: string) => {
-    if (!text) return;
-    navigator.clipboard.writeText(text);
-    toast.success('SDK Key Copied internally');
+  const fireTestWebhook = async (webhookId: string) => {
+     setIsFiring(true);
+     addLog('info', 'webhook', 'Warming up simulation engine towards endpoint...');
+     
+     try {
+        addLog('request', 'webhook', `POST /api/v1/webhooks/${webhookId}/test`);
+        const res = await api.post(`/webhooks/${webhookId}/test`);
+        addLog('response', 'webhook', `Received Backend Dispatch Thread: HTTP 200 OK`, res.data);
+        toast.success('Webhook delivery queued on Go backend.');
+        setTimeout(fetchDeveloperData, 1000); // Poll for the event showing up in the DB
+     } catch (e: any) {
+        addLog('error', 'webhook', 'Failed to trace webhook to destination.', e?.response?.data);
+     } finally {
+        setIsFiring(false);
+     }
   };
 
-  const toggleSecret = (id: string) => {
-    setShowSecret(prev => ({ ...prev, [id]: !prev[id] }));
+  const getPrimaryTestKey = () => {
+      const testKey = keys.find(k => k.environment === 'test');
+      return testKey?.publishable_key || 'pk_test_...';
   };
-
-  const handleRetryWebhook = async (id: string) => {
-    try {
-      await api.post(`/webhooks/events/${id}/retry`);
-      toast.success('Event re-queued for delivery loop.');
-      fetchDeveloperData();
-    } catch {
-      toast.error('Failed to trigger retry');
-    }
-  };
-
-  if (loading) {
-     return <div className="p-8 text-muted-foreground animate-pulse font-mono flex items-center gap-2"><Key className="w-4 h-4"/> Initiating Development Engine...</div>;
-  }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8 p-6 lg:p-8">
-      {/* Overview Engine Header */}
-      <div className="flex flex-col md:flex-row justify-between md:items-end gap-6 bg-gradient-to-r from-blue-900/10 to-indigo-900/10 p-8 rounded-3xl border border-blue-500/10">
-        <div>
-          <h1 className="text-4xl justify-center items-center flex gap-3 font-black text-foreground tracking-tight">
-             <Terminal className="w-10 h-10 text-blue-500" /> API Workstation
-          </h1>
-          <p className="text-muted-foreground mt-3 font-mono">
-            Integrate Advanced Pay natively. Manage SDK keys and configure real-time asynchronous Webhooks.
-          </p>
-        </div>
-        <div className="flex bg-background/50 p-2 rounded-xl border border-border/50 gap-2">
-            <Button variant="default" onClick={() => handleGenerateKey('test')} className="bg-slate-800 hover:bg-slate-700">
-               Generate Test Key
-            </Button>
-            <Button variant="default" onClick={() => handleGenerateKey('live')} className="bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/20">
-               Generate Live Key
-            </Button>
-        </div>
-      </div>
+    <div className="flex h-full bg-[#0A0A0A] overflow-hidden text-slate-300">
+       
+       {/* LEFT PANE: WORKSPACE */}
+       <div className="flex-1 overflow-y-auto border-r border-slate-800 p-8 flex flex-col">
+           <div className="mb-6 flex justify-between items-end">
+              <div>
+                  <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+                     <Terminal className="w-8 h-8 text-blue-500" /> Developer IDE
+                  </h1>
+                  <p className="text-slate-500 mt-2 text-sm">A complete live-testing environment for your integration.</p>
+              </div>
+           </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
-        {/* API KEYS MATRIX */}
-        <Card className="border-border/60 shadow-lg relative overflow-hidden">
-           <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Key className="w-32 h-32"/></div>
-           <CardHeader>
-               <CardTitle className="flex items-center gap-2 text-xl"><Code className="w-5 h-5 text-blue-500" /> Platform SDK Keys</CardTitle>
-               <CardDescription>Authentication parameters determining environment execution.</CardDescription>
-           </CardHeader>
-           <CardContent className="space-y-4 z-10 relative">
-               {keys.length === 0 ? (
-                   <div className="p-8 text-center text-muted-foreground font-mono text-sm border-2 border-dashed border-border/50 rounded-xl">
-                       No Active Root Keys
-                   </div>
-               ) : (
-                   keys.map(key => (
-                       <div key={key.id} className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm space-y-3">
-                           <div className="flex justify-between items-center">
-                               <Badge variant={key.environment === 'live' ? 'default' : 'secondary'} 
-                                      className={key.environment === 'live' ? 'bg-blue-600' : ''}>
-                                   {key.environment.toUpperCase()}
-                               </Badge>
-                               <span className="text-xs text-muted-foreground font-mono">{new Date(key.created_at).toLocaleDateString()}</span>
-                           </div>
-                           
-                           <div>
-                               <p className="text-xs font-bold text-muted-foreground mb-1 uppercase tracking-wider">Publishable Key</p>
-                               <div className="flex items-center gap-2">
-                                   <code className="flex-1 bg-muted/40 p-2 rounded-lg text-xs break-all">{key.publishable_key}</code>
-                                   <Button size="icon" variant="ghost" onClick={() => handleCopy(key.publishable_key)}><Copy className="w-4 h-4 text-muted-foreground" /></Button>
+           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+              <TabsList className="bg-[#111111] border border-slate-800 mb-6 p-1 justify-start">
+                 <TabsTrigger value="keys" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">API Keys</TabsTrigger>
+                 <TabsTrigger value="code" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Integration Code</TabsTrigger>
+                 <TabsTrigger value="webhooks" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Webhook Sandbox</TabsTrigger>
+              </TabsList>
+
+              <div className="flex-1 overflow-y-auto">
+                  {/* TAB: KEYS */}
+                  <TabsContent value="keys" className="mt-0 space-y-4">
+                     <div className="flex justify-between items-center bg-[#111111] p-4 rounded-lg border border-slate-800">
+                        <div>
+                           <h3 className="font-semibold text-white">Generate Authenticator</h3>
+                           <p className="text-xs text-slate-500">Create new bearer tokens for your stack.</p>
+                        </div>
+                        <div className="flex gap-2">
+                           <Button variant="outline" className="border-slate-700 bg-transparent" onClick={() => handleGenerateKey('test')}>New Test Key</Button>
+                           <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => handleGenerateKey('live')}>New Live Key</Button>
+                        </div>
+                     </div>
+
+                     {keys.map((key) => (
+                        <Card key={key.id} className="bg-[#111111] border-slate-800">
+                           <CardContent className="p-4 flex justify-between items-center">
+                               <div>
+                                  <Badge variant="outline" className={key.environment === 'live' ? 'text-red-400 border-red-500/50' : 'text-emerald-400 border-emerald-500/50'}>
+                                     {key.environment.toUpperCase()}
+                                  </Badge>
+                                  <div className="mt-2 font-mono text-xs p-2 bg-black rounded border border-slate-800 break-all w-[300px]">
+                                     {key.publishable_key}
+                                  </div>
                                </div>
-                           </div>
+                               <Button variant="ghost" size="icon" onClick={() => { navigator.clipboard.writeText(key.publishable_key); toast.success('Key copied!'); }}>
+                                  <Copy className="w-4 h-4 text-slate-500" />
+                               </Button>
+                           </CardContent>
+                        </Card>
+                     ))}
+                  </TabsContent>
 
-                           <div>
-                               <p className="text-xs font-bold text-muted-foreground mb-1 uppercase tracking-wider">Secret Bound Trace</p>
-                               <div className="flex items-center gap-2">
-                                   <code className="flex-1 bg-muted/40 p-2 rounded-lg text-xs break-all text-blue-400">
-                                       {key.secret_key ? (showSecret[key.id] ? key.secret_key : 'sk_' + key.environment + '_•••••••••••••••••••••••••') 
-                                                       : 'sk_' + key.environment + '_•••••••••••••••••••••••••'}
-                                   </code>
-                                   {key.secret_key && (
-                                       <Button size="icon" variant="ghost" onClick={() => toggleSecret(key.id)}>
-                                           {showSecret[key.id] ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
-                                       </Button>
-                                   )}
-                                   <Button size="icon" variant="ghost" onClick={() => handleCopy(key.secret_key)} disabled={!key.secret_key}><Copy className="w-4 h-4 text-muted-foreground" /></Button>
-                               </div>
-                               {key.secret_key && <p className="text-[10px] text-amber-500 mt-2 font-mono">WARNING: Secret is only visible immediately after generation!</p>}
-                           </div>
-                       </div>
-                   ))
-               )}
-           </CardContent>
-        </Card>
+                  {/* TAB: CODE */}
+                  <TabsContent value="code" className="mt-0 space-y-6">
+                      <div>
+                          <h3 className="text-lg font-semibold text-white mb-2 font-mono">1. Install SDK</h3>
+                          <div className="bg-[#050505] border border-slate-800 p-4 rounded-lg font-mono text-sm text-blue-400 flex justify-between items-center group">
+                              <span>npm install @advancedpay/node</span>
+                              <Copy className="w-4 h-4 opacity-0 group-hover:opacity-100 cursor-pointer text-slate-500" />
+                          </div>
+                      </div>
 
-        {/* WEBHOOK LISTENERS */}
-        <Card className="border-border/60 shadow-lg relative overflow-hidden">
-           <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Webhook className="w-32 h-32"/></div>
-           <CardHeader className="flex flex-row justify-between items-start">
-               <div>
-                   <CardTitle className="flex items-center gap-2 text-xl"><Activity className="w-5 h-5 text-indigo-500" /> Webhook Integrations</CardTitle>
-                   <CardDescription>Event-driven push alerts for back-end synchronizations.</CardDescription>
-               </div>
-               <Button variant="outline" size="sm" className="gap-2"><Plus className="w-4 h-4"/> Add Endpoint</Button>
-           </CardHeader>
-           <CardContent className="space-y-4 z-10 relative">
-               {webhooks.length === 0 ? (
-                   <div className="p-8 text-center text-muted-foreground font-mono text-sm border-2 border-dashed border-border/50 rounded-xl">
-                       No Endpoints Registered
-                   </div>
-               ) : (
-                   webhooks.map(hook => (
-                       <div key={hook.id} className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm space-y-3 group transition-all hover:bg-muted/10">
-                           <div className="flex justify-between items-center">
-                               <div className="flex items-center gap-2">
-                                 <div className={`w-2 h-2 rounded-full ${hook.is_active ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                                 <span className="font-mono text-sm truncate max-w-[200px]">{hook.url}</span>
-                               </div>
-                               <Button variant="ghost" size="sm" className="h-7 text-xs">Test Ping</Button>
-                           </div>
-                           <div className="flex flex-wrap gap-2">
-                               {hook.events.map(ev => (
-                                   <Badge key={ev} variant="outline" className="bg-background text-[10px] uppercase font-mono">{ev}</Badge>
-                               ))}
-                           </div>
-                       </div>
-                   ))
-               )}
-           </CardContent>
-        </Card>
+                      <div>
+                          <h3 className="text-lg font-semibold text-white mb-2 font-mono">2. Initialize Intent</h3>
+                          <div className="bg-[#050505] border border-slate-800 rounded-lg overflow-hidden">
+                              <div className="bg-[#111] px-4 py-2 border-b border-slate-800 flex items-center gap-2 text-xs font-mono text-slate-400">
+                                 <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                 <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                                 <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                 <span className="ml-2">server.js</span>
+                              </div>
+                              <div className="p-4 font-mono text-sm overflow-x-auto whitespace-pre">
+<span className="text-pink-500">import</span> { '{ AdvancedPay }' } <span className="text-pink-500">from</span> <span className="text-green-400">'@advancedpay/node'</span>;{'\n\n'}
+<span className="text-slate-500">// Auto-injected test key below</span>{'\n'}
+<span className="text-pink-500">const</span> advancedpay = <span className="text-pink-500">new</span> AdvancedPay(<span className="text-green-400">'{getPrimaryTestKey()}'</span>);{'\n\n'}
+<span className="text-pink-500">const</span> session = <span className="text-pink-500">await</span> advancedpay.checkout.create({'{'}{'\n'}
+{'  '}amount: <span className="text-orange-400">5999</span>,{'\n'}
+{'  '}currency: <span className="text-green-400">'usd'</span>,{'\n'}
+{'  '}success_url: <span className="text-green-400">'https://your-site.com/success'</span>{'\n'}
+{'}'});
+                              </div>
+                          </div>
+                      </div>
+                  </TabsContent>
 
-      </div>
-
-      {/* REAL-TIME DELIVERY LOGS */}
-      <div className="mt-8">
-        <Card className="border-border/60 shadow-xl overflow-hidden bg-slate-950 text-slate-300">
-           <CardHeader className="border-b border-white/5 bg-slate-900/50 flex flex-row items-center justify-between pb-4">
-               <div>
-                   <CardTitle className="text-xl text-white flex items-center gap-2"><Server className="w-5 h-5 text-green-400" /> Webhook Delivery Simulator</CardTitle>
-                   <CardDescription className="text-slate-400">Real-time asynchronous payload trace logs. Click to inspect JSON payloads.</CardDescription>
-               </div>
-               <Button onClick={fetchDeveloperData} variant="outline" size="sm" className="bg-transparent border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"><RefreshCw className="w-4 h-4 mr-2"/> Refresh Engine</Button>
-           </CardHeader>
-           <CardContent className="p-0">
-               {webhookEvents.length === 0 ? (
-                   <div className="p-12 text-center text-slate-500 font-mono text-sm">
-                       No webhook dispatches captured yet. Trigger an API test.
-                   </div>
-               ) : (
-                   <div className="divide-y divide-white/5">
-                       {webhookEvents.map(event => (
-                           <div key={event.id} className="flex flex-col group">
-                               {/* Row Header */}
-                               <div 
-                                 className="flex items-center justify-between p-4 hover:bg-slate-900/80 cursor-pointer transition-colors"
-                                 onClick={() => setExpandedEvent(expandedEvent === event.id ? null : event.id)}
-                               >
-                                   <div className="flex items-center gap-4 w-1/3">
-                                       {event.status === 'delivered' ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : event.status === 'failed' ? <XCircle className="w-5 h-5 text-red-500" /> : <RefreshCw className="w-5 h-5 text-yellow-500 animate-spin" />}
-                                       <span className="font-mono text-sm text-slate-200">{event.event_type}</span>
+                  {/* TAB: WEBHOOKS */}
+                  <TabsContent value="webhooks" className="mt-0">
+                      <Card className="bg-transparent border border-indigo-500/20 shadow-[0_0_50px_rgba(99,102,241,0.05)] relative overflow-hidden">
+                          <div className="absolute -top-24 -right-24 w-48 h-48 bg-indigo-500/20 blur-[100px] rounded-full pointer-events-none" />
+                          <CardHeader className="flex flex-row justify-between items-center z-10 relative">
+                             <div>
+                                <CardTitle className="text-indigo-400 flex items-center gap-2"><Webhook className="w-5 h-5"/> Live API Configuration</CardTitle>
+                                <CardDescription className="text-slate-500">Configure real HTTP destinations synced strictly to the Go SQL Backend.</CardDescription>
+                             </div>
+                          </CardHeader>
+                          <CardContent className="space-y-6 z-10 relative border-t border-slate-800/50 pt-6">
+                             <div className="flex gap-2">
+                                <input 
+                                   type="url" 
+                                   className="flex-1 bg-[#050505] border border-slate-800 rounded p-3 text-sm font-mono text-emerald-400 outline-none focus:border-indigo-500" 
+                                   placeholder="https://your-server.com/api/webhooks"
+                                   value={newWebhookUrl}
+                                   onChange={(e) => setNewWebhookUrl(e.target.value)}
+                                />
+                                <Button onClick={handleCreateWebhook} className="bg-indigo-600 hover:bg-indigo-700 whitespace-nowrap">Register Endpoint</Button>
+                             </div>
+                             
+                             <div className="mt-6 space-y-4">
+                                {webhooks.length === 0 ? (
+                                   <div className="text-center font-mono text-sm text-slate-500 p-8 border border-slate-800 border-dashed rounded bg-[#0a0a0a]">No endpoints strictly registered.</div>
+                                ) : webhooks.map(hook => (
+                                   <div key={hook.id} className="bg-[#111111] border border-slate-800 p-4 rounded-lg flex items-center justify-between">
+                                      <div>
+                                         <div className="flex items-center gap-2 mb-1">
+                                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                            <span className="font-mono text-emerald-400">{hook.url}</span>
+                                         </div>
+                                         <div className="text-xs text-slate-500 font-mono tracking-widest">{hook.secret || 'Sec_HIDDEN'}</div>
+                                      </div>
+                                      <Button disabled={isFiring} onClick={() => fireTestWebhook(hook.id)} variant="outline" className="border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300">
+                                         {isFiring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 mr-2" fill="currentColor" />}
+                                         Fire Backend Trace
+                                      </Button>
                                    </div>
-                                   <div className="w-1/3 text-center">
-                                       <Badge variant="outline" className={`bg-transparent font-mono text-[10px] ${event.status === 'delivered' ? 'text-green-400 border-green-400/30' : event.status === 'failed' ? 'text-red-400 border-red-400/30' : 'text-yellow-400 border-yellow-400/30'}`}>
-                                           {event.status.toUpperCase()}
-                                       </Badge>
-                                   </div>
-                                   <div className="w-1/3 text-right text-xs font-mono text-slate-500 flex justify-end items-center gap-4">
-                                       {new Date(event.created_at).toLocaleString()}
-                                       <Code className="w-4 h-4" />
-                                   </div>
-                               </div>
+                                ))}
+                             </div>
 
-                               {/* Expanded JSON Inspector */}
-                               {expandedEvent === event.id && (
-                                   <div className="bg-[#0c1017] p-6 border-t border-white/5 relative shadow-inner">
-                                       <div className="absolute top-4 right-4 flex items-center gap-2">
-                                           <Button size="sm" variant="outline" className="h-8 bg-slate-900 border-slate-700 text-slate-300 hover:text-white" onClick={() => handleCopy(JSON.stringify(event.payload, null, 2))}>
-                                              <Copy className="w-3.5 h-3.5 mr-2" /> Copy Payload
-                                           </Button>
-                                           <Button size="sm" onClick={() => handleRetryWebhook(event.id)} className="h-8 bg-indigo-600 hover:bg-indigo-700 text-white border-0">
-                                              <RotateCcw className="w-3.5 h-3.5 mr-2" /> Retry Delivery
-                                           </Button>
-                                       </div>
-                                       
-                                       <div className="grid grid-cols-2 gap-8 w-[calc(100%-250px)]">
-                                          <div>
-                                              <p className="text-xs uppercase tracking-widest text-slate-500 mb-2 font-bold">Event Trajectory</p>
-                                              <div className="space-y-1 font-mono text-xs text-slate-400">
-                                                  <p>ID: <span className="text-blue-400">{event.id}</span></p>
-                                                  <p>Attempts: <span className="text-orange-400">{event.attempts}</span> / 5</p>
-                                                  {event.transaction_id && <p>Transaction Bound: <span className="text-purple-400">{event.transaction_id}</span></p>}
-                                              </div>
-                                          </div>
-                                       </div>
-                                       
-                                       <div className="mt-4">
-                                          <p className="text-xs uppercase tracking-widest text-slate-500 mb-2 font-bold">Raw JSON Payload</p>
-                                          <div className="bg-[#05070a] border border-white/5 rounded-xl p-4 overflow-x-auto">
-                                              <pre className="text-[11px] font-mono leading-relaxed text-emerald-400">
-                                                  {JSON.stringify(event.payload, null, 2)}
-                                              </pre>
-                                          </div>
-                                       </div>
+                             {webhookEvents.length > 0 && (
+                                <div className="mt-8">
+                                   <h4 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">Historical Triggers</h4>
+                                   <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                                      {webhookEvents.map((evt, idx) => (
+                                         <div key={evt.id || idx} className="bg-[#050505] border border-slate-800 p-3 rounded text-xs font-mono text-slate-300 flex justify-between items-center">
+                                            <div className="flex items-center gap-3">
+                                               {evt.status === 'delivered' ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Loader2 className="w-4 h-4 text-yellow-500" />}
+                                               <span>{evt.event_type}</span>
+                                            </div>
+                                            <span className="text-slate-600">{new Date(evt.created_at).toLocaleTimeString()}</span>
+                                         </div>
+                                      ))}
                                    </div>
-                               )}
-                           </div>
-                       ))}
-                   </div>
-               )}
-           </CardContent>
-        </Card>
-      </div>
+                                </div>
+                             )}
+                          </CardContent>
+                      </Card>
+                  </TabsContent>
+              </div>
+           </Tabs>
+       </div>
+
+       {/* RIGHT PANE: TERMINAL UI */}
+       <div className="w-[450px] bg-[#050505] border-l border-slate-800 flex flex-col shadow-[-20px_0_50px_rgba(0,0,0,0.5)] z-10">
+           <div className="h-14 border-b border-slate-800 flex items-center px-4 justify-between bg-[#0a0a0a]">
+              <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Live Server Trace
+              </span>
+              <Button variant="ghost" size="icon" onClick={() => setLogs([])}>
+                 <Trash2 className="w-4 h-4 text-slate-600 hover:text-red-400" />
+              </Button>
+           </div>
+           
+           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-[11px] leading-relaxed scroll-smooth">
+              {logs.map(log => (
+                 <div key={log.id} className="animate-in fade-in slide-in-from-bottom-2">
+                    <div className="flex gap-3 text-slate-600 mb-1">
+                       <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
+                       <span className="uppercase text-slate-500">[{log.source}]</span>
+                    </div>
+                    
+                    <div className={`
+                       ${log.type === 'error' ? 'text-red-400' : ''}
+                       ${log.type === 'success' ? 'text-emerald-400' : ''}
+                       ${log.type === 'request' ? 'text-blue-400' : ''}
+                       ${log.type === 'response' ? 'text-yellow-400' : ''}
+                       ${log.type === 'info' ? 'text-slate-300' : ''}
+                    `}>
+                       {log.type === 'request' && <span className="mr-2">{'->'}</span>}
+                       {log.type === 'response' && <span className="mr-2">{'<-'}</span>}
+                       {log.message}
+                    </div>
+
+                    {log.payload && (
+                       <pre className="mt-2 bg-[#111111] p-3 rounded border border-slate-800 text-green-400 overflow-x-auto selection:bg-green-500/30">
+                          {JSON.stringify(log.payload, null, 2)}
+                       </pre>
+                    )}
+                 </div>
+              ))}
+           </div>
+       </div>
 
     </div>
   );

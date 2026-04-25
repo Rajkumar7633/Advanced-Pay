@@ -33,31 +33,7 @@ const TOOLTIP_STYLE = {
   color: '#e2e8f0',
 };
 
-// ─── HEATMAP UTILS ───────────────────────────────────────────────────────────
-const DAYS  = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const HOURS = [0,3,6,9,12,15,18,21];
-
-function generateHeatmap(revenueByDay: { date: string; amount: any }[]) {
-  // Build a day-of-week × hour-band matrix from date data
-  const matrix: Record<string, number> = {};
-  revenueByDay.forEach(d => {
-    const dow = new Date(d.date).getDay();
-    const bucket = Math.floor(Math.random() * 8); // approximate hour band
-    const key = `${dow}-${bucket}`;
-    matrix[key] = (matrix[key] || 0) + Number(d.amount || 0);
-  });
-  return matrix;
-}
-
-function heatColor(val: number, max: number) {
-  if (max === 0) return 'bg-white/5';
-  const pct = val / max;
-  if (pct > 0.8) return 'bg-blue-500';
-  if (pct > 0.6) return 'bg-blue-500/70';
-  if (pct > 0.4) return 'bg-blue-500/40';
-  if (pct > 0.2) return 'bg-blue-500/20';
-  return 'bg-white/5';
-}
+// Removed fake heatmap utilities
 
 // ─── STAT CARD ───────────────────────────────────────────────────────────────
 function StatCard({ label, value, delta, icon: Icon, accent }: {
@@ -130,8 +106,6 @@ export default function AnalyticsPage() {
   const revenueByDay = (data?.revenueByDay || []).map(p => ({
     date: new Date(p.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
     revenue: Number(p.amount ?? 0),
-    // Simulate a projected line (1.1× trend)
-    projected: Number(p.amount ?? 0) * 1.12,
   }));
 
   const successByDay = (data?.successRateByDay || []).map(p => ({
@@ -154,9 +128,6 @@ export default function AnalyticsPage() {
     { name: 'Settled',    value: Math.round(totalTxns * successRate / 100 * 0.9) },
   ];
 
-  // Heatmap
-  const heatMatrix = generateHeatmap(data?.revenueByDay || []);
-  const heatMax    = Math.max(...Object.values(heatMatrix), 1);
 
   // Radial KPI data
   const radialData = [
@@ -239,18 +210,12 @@ export default function AnalyticsPage() {
                       <stop offset="5%"  stopColor={PALETTE.blue}   stopOpacity={0.3} />
                       <stop offset="95%" stopColor={PALETTE.blue}   stopOpacity={0} />
                     </linearGradient>
-                    <linearGradient id="projGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor={PALETTE.indigo} stopOpacity={0.15} />
-                      <stop offset="95%" stopColor={PALETTE.indigo} stopOpacity={0} />
-                    </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="date" stroke="rgba(255,255,255,0.2)" tick={{ fontSize: 11 }} />
                   <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fontSize: 11 }} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [formatCurrency(v)]} />
-                  <Legend wrapperStyle={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }} />
                   <Area type="monotone" dataKey="revenue"   name="Revenue"   stroke={PALETTE.blue}   fill="url(#revGrad)"  strokeWidth={2} dot={false} />
-                  <Area type="monotone" dataKey="projected" name="Projected" stroke={PALETTE.indigo} fill="url(#projGrad)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
             </CardContent>
@@ -356,53 +321,6 @@ export default function AnalyticsPage() {
           </Card>
         </div>
 
-        {/* ── Activity Heatmap ── */}
-        <Card className="border-white/5 bg-white/[0.03]">
-          <CardHeader>
-            <CardTitle className="text-white text-lg">Transaction Activity Heatmap</CardTitle>
-            <CardDescription className="text-white/40">Revenue intensity by day-of-week and time block</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <div className="min-w-[500px]">
-                {/* Hour labels */}
-                <div className="flex mb-2 pl-10">
-                  {HOURS.map(h => (
-                    <div key={h} className="flex-1 text-center text-white/30 text-[10px] font-mono">
-                      {h.toString().padStart(2,'0')}:00
-                    </div>
-                  ))}
-                </div>
-                {/* Grid */}
-                {DAYS.map((day, di) => (
-                  <div key={day} className="flex items-center mb-1.5 gap-2">
-                    <span className="text-white/30 text-xs w-8 font-mono">{day}</span>
-                    <div className="flex flex-1 gap-1">
-                      {HOURS.map((_, hi) => {
-                        const val = heatMatrix[`${di}-${hi}`] || 0;
-                        return (
-                          <div
-                            key={hi}
-                            className={`flex-1 h-7 rounded-md transition-all ${heatColor(val, heatMax)} hover:opacity-80 cursor-default`}
-                            title={`${day} ${HOURS[hi]}:00 — ${formatCurrency(val)}`}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-                {/* Legend */}
-                <div className="flex items-center gap-2 mt-4 justify-end">
-                  <span className="text-white/30 text-xs">Less</span>
-                  {['bg-white/5','bg-blue-500/20','bg-blue-500/40','bg-blue-500/70','bg-blue-500'].map(c => (
-                    <div key={c} className={`w-5 h-4 rounded ${c}`} />
-                  ))}
-                  <span className="text-white/30 text-xs">More</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* ── Success Rate Bar ── */}
         <Card className="border-white/5 bg-white/[0.03]">

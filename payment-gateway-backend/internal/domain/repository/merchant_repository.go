@@ -35,12 +35,18 @@ func (r *merchantRepository) CreateAPIKey(ctx context.Context, key *APIKey) erro
 
 func (r *merchantRepository) GetAPIKeys(ctx context.Context, merchantID uuid.UUID) ([]APIKey, error) {
 	var keys []APIKey
-	query := `SELECT id, merchant_id, environment, publishable_key, is_active, created_at::text as created_at FROM api_keys WHERE merchant_id = $1`
+	query := `SELECT id, merchant_id, environment, publishable_key, is_active, created_at::text as created_at FROM api_keys WHERE merchant_id = $1 AND is_active = true`
 	err := r.db.SelectContext(ctx, &keys, query, merchantID)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 	return keys, nil
+}
+
+func (r *merchantRepository) DeleteAPIKey(ctx context.Context, keyID string) error {
+	query := `UPDATE api_keys SET is_active = false, updated_at = NOW() WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, query, keyID)
+	return err
 }
 
 func (r *merchantRepository) GetMerchantBySecretKey(ctx context.Context, rawSecret string) (*models.Merchant, string, error) {
@@ -74,16 +80,16 @@ func (r *merchantRepository) Create(ctx context.Context, merchant *models.Mercha
 	query := `
 		INSERT INTO merchants (
 			id, business_name, email, phone, password_hash, api_key_hash,
-			api_secret_hash, status, kyc_status, created_at, updated_at,
+			api_secret_hash, status, kyc_status, kyc_documents, created_at, updated_at,
 			website, industry, tax_id, gst_number, address_street,
 			address_city, address_state, address_country, address_postal_code, settings,
 			two_factor_enabled, two_factor_secret, token_version
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)`
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)`
 
 	_, err := r.db.ExecContext(ctx, query,
 		merchant.ID, merchant.BusinessName, merchant.Email, merchant.Phone,
 		merchant.PasswordHash, merchant.APIKeyHash, merchant.APISecretHash,
-		merchant.Status, merchant.KYCStatus, merchant.CreatedAt, merchant.UpdatedAt,
+		merchant.Status, merchant.KYCStatus, merchant.KYCDocuments, merchant.CreatedAt, merchant.UpdatedAt,
 		merchant.Website, merchant.Industry, merchant.TaxID, merchant.GSTNumber,
 		merchant.AddressStreet, merchant.AddressCity, merchant.AddressState,
 		merchant.AddressCountry, merchant.AddressPostalCode, merchant.Settings,
@@ -96,7 +102,7 @@ func (r *merchantRepository) Create(ctx context.Context, merchant *models.Mercha
 func (r *merchantRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Merchant, error) {
 	query := `
 		SELECT id, business_name, email, phone, description, password_hash, api_key_hash,
-		       api_secret_hash, status, kyc_status, created_at, updated_at,
+		       api_secret_hash, status, kyc_status, kyc_documents, created_at, updated_at,
 		       website, industry, tax_id, gst_number, address_street,
 		       address_city, address_state, address_country, address_postal_code, settings,
 		       two_factor_enabled, two_factor_secret, token_version
@@ -118,7 +124,7 @@ func (r *merchantRepository) GetByID(ctx context.Context, id uuid.UUID) (*models
 func (r *merchantRepository) GetByEmail(ctx context.Context, email string) (*models.Merchant, error) {
 	query := `
 		SELECT id, business_name, email, phone, description, password_hash, api_key_hash,
-		       api_secret_hash, status, kyc_status, created_at, updated_at,
+		       api_secret_hash, status, kyc_status, kyc_documents, created_at, updated_at,
 		       website, industry, tax_id, gst_number, address_street,
 		       address_city, address_state, address_country, address_postal_code, settings,
 		       two_factor_enabled, two_factor_secret, token_version
@@ -140,7 +146,7 @@ func (r *merchantRepository) GetByEmail(ctx context.Context, email string) (*mod
 func (r *merchantRepository) GetByAPIKey(ctx context.Context, apiKeyHash string) (*models.Merchant, error) {
 	query := `
 		SELECT id, business_name, email, phone, description, password_hash, api_key_hash,
-		       api_secret_hash, status, kyc_status, created_at, updated_at,
+		       api_secret_hash, status, kyc_status, kyc_documents, created_at, updated_at,
 		       website, industry, tax_id, gst_number, address_street,
 		       address_city, address_state, address_country, address_postal_code, settings,
 		       two_factor_enabled, two_factor_secret, token_version
@@ -167,8 +173,8 @@ func (r *merchantRepository) Update(ctx context.Context, merchant *models.Mercha
 		    website = $7, industry = $8, tax_id = $9, gst_number = $10,
 		    address_street = $11, address_city = $12, address_state = $13,
 		    address_country = $14, address_postal_code = $15, settings = $16,
-		    password_hash = $17, two_factor_enabled = $18, two_factor_secret = $19, token_version = $20
-		WHERE id = $21`
+		    password_hash = $17, two_factor_enabled = $18, two_factor_secret = $19, token_version = $20, kyc_documents = $21
+		WHERE id = $22`
 
 	_, err := r.db.ExecContext(ctx, query,
 		merchant.BusinessName, merchant.Phone, merchant.Status,
@@ -176,7 +182,7 @@ func (r *merchantRepository) Update(ctx context.Context, merchant *models.Mercha
 		merchant.Website, merchant.Industry, merchant.TaxID, merchant.GSTNumber,
 		merchant.AddressStreet, merchant.AddressCity, merchant.AddressState,
 		merchant.AddressCountry, merchant.AddressPostalCode, merchant.Settings,
-		merchant.PasswordHash, merchant.TwoFactorEnabled, merchant.TwoFactorSecret, merchant.TokenVersion,
+		merchant.PasswordHash, merchant.TwoFactorEnabled, merchant.TwoFactorSecret, merchant.TokenVersion, merchant.KYCDocuments,
 		merchant.ID,
 	)
 
@@ -187,4 +193,39 @@ func (r *merchantRepository) UpdateStatus(ctx context.Context, id uuid.UUID, sta
 	query := `UPDATE merchants SET status = $1, updated_at = NOW() WHERE id = $2`
 	_, err := r.db.ExecContext(ctx, query, status, id)
 	return err
+}
+
+func (r *merchantRepository) GetPlatformBillingProfile(ctx context.Context, merchantID uuid.UUID) (*models.PlatformBillingProfile, error) {
+	var profile models.PlatformBillingProfile
+	query := `SELECT * FROM merchant_billing_profiles WHERE merchant_id = $1`
+	err := r.db.GetContext(ctx, &profile, query, merchantID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // Return nil profile if not found, allowing service to default/create it
+		}
+		return nil, err
+	}
+	return &profile, nil
+}
+
+func (r *merchantRepository) CreatePlatformBillingProfile(ctx context.Context, profile *models.PlatformBillingProfile) error {
+	query := `
+		INSERT INTO merchant_billing_profiles (merchant_id, plan_name, fee_percentage, fixed_fee, next_billing_date, platform_card_brand, platform_card_last4)
+		VALUES (:merchant_id, :plan_name, :fee_percentage, :fixed_fee, :next_billing_date, :platform_card_brand, :platform_card_last4)
+	`
+	_, err := r.db.NamedExecContext(ctx, query, profile)
+	return err
+}
+
+func (r *merchantRepository) GetPlatformInvoices(ctx context.Context, merchantID uuid.UUID) ([]*models.PlatformInvoice, error) {
+	var invoices []*models.PlatformInvoice
+	query := `SELECT * FROM platform_invoices WHERE merchant_id = $1 ORDER BY created_at DESC`
+	err := r.db.SelectContext(ctx, &invoices, query, merchantID)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+	if invoices == nil {
+		invoices = make([]*models.PlatformInvoice, 0)
+	}
+	return invoices, nil
 }

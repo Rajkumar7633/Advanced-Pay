@@ -72,6 +72,7 @@ func main() {
 	subscriptionRepo := repository.NewSubscriptionRepository(db)
 	teamRepo := repository.NewTeamRepository(db)
 	vaultRepo := repository.NewVaultRepository(db)
+	bankingRepo := repository.NewBankingRepository(db)
 	reportingService := service.NewReportingService(db)
 
 	routingService := service.NewRoutingService(cfg.MLServices.FraudURL, log)
@@ -97,13 +98,13 @@ func main() {
 		pulseHub,
 		log,
 	)
-	merchantService := service.NewMerchantService(merchantRepo, transactionRepo, teamRepo, log)
-	authService := service.NewAuthService(merchantRepo, cacheClient, cfg.JWT, log)
+	merchantService := service.NewMerchantService(merchantRepo, transactionRepo, teamRepo, bankingRepo, log)
+	adminRepo := repository.NewAdminRepository(db)
+	authService := service.NewAuthService(merchantRepo, adminRepo, cacheClient, cfg.JWT, log)
 	subscriptionService := service.NewSubscriptionService(subscriptionRepo, log)
 
 	// Initialize repositories
 	paymentLinkRepo := repository.NewPaymentLinkRepository(db)
-	adminRepo := repository.NewAdminRepository(db)
 	disputeRepo := repository.NewDisputeRepository(db)
 
 	// Initialize handlers
@@ -116,7 +117,7 @@ func main() {
 	settlementHandler := handlers.NewSettlementHandler(settlementService, log)
 	checkoutHandler := handlers.NewCheckoutHandler(cacheClient)
 	publicRoutingHandler := handlers.NewPublicRoutingHandler(routingService, cacheClient)
-	publicPaymentHandler := handlers.NewPublicPaymentHandler(paymentService, cacheClient)
+	publicPaymentHandler := handlers.NewPublicPaymentHandler(paymentService, adminRepo, cacheClient)
 	vaultHandler := handlers.NewVaultHandler(vaultService, log)
 	websocketHandler := handlers.NewWebsocketHandler(pulseHub, log)
 	
@@ -277,7 +278,17 @@ func main() {
 		// Public admin login (no JWT required)
 		v1.POST("/admin/login", adminHandler.AdminLogin)
 
-		// Protected routes (require authentication)
+		// Onboarding routes (require JWT, but merchant can be in pending state)
+		onboarding := v1.Group("")
+		onboarding.Use(middleware.JWTAuth(cfg.JWT.Secret, cacheClient))
+		{
+			onboarding.POST("/merchants/kyc", merchantHandler.UploadKYC)
+			onboarding.GET("/merchants/me", merchantHandler.GetProfile)
+			onboarding.PUT("/merchants/me", merchantHandler.UpdateProfile)
+			onboarding.GET("/merchants/me/billing", merchantHandler.GetBilling)
+		}
+
+		// Protected routes (require authentication and ACTIVE merchant)
 		authenticated := v1.Group("")
 		authenticated.Use(middleware.JWTAuth(cfg.JWT.Secret, cacheClient))
 		authenticated.Use(middleware.MerchantMustBeActive(merchantRepo))
@@ -310,8 +321,6 @@ func main() {
 			// Merchant routes
 			merchants := authenticated.Group("/merchants")
 			{
-				merchants.GET("/me", merchantHandler.GetProfile)
-				merchants.PUT("/me", merchantHandler.UpdateProfile)
 				merchants.GET("/stats", merchantHandler.GetStats)
 
 				// Team management

@@ -55,7 +55,12 @@ type MerchantRepository interface {
 	
 	CreateAPIKey(ctx context.Context, key *APIKey) error
 	GetAPIKeys(ctx context.Context, merchantID uuid.UUID) ([]APIKey, error)
+	DeleteAPIKey(ctx context.Context, keyID string) error
 	GetMerchantBySecretKey(ctx context.Context, secretHash string) (*models.Merchant, string, error)
+
+	GetPlatformBillingProfile(ctx context.Context, merchantID uuid.UUID) (*models.PlatformBillingProfile, error)
+	CreatePlatformBillingProfile(ctx context.Context, profile *models.PlatformBillingProfile) error
+	GetPlatformInvoices(ctx context.Context, merchantID uuid.UUID) ([]*models.PlatformInvoice, error)
 }
 
 // PaymentRepository defines payment data access methods

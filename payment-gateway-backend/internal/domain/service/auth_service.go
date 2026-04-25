@@ -19,6 +19,7 @@ import (
 // AuthService handles authentication logic
 type AuthService struct {
 	merchantRepo repository.MerchantRepository
+	adminRepo    repository.AdminRepository
 	cache        cache.Client
 	jwtConfig    config.JWTConfig
 	logger       *logger.Logger
@@ -35,12 +36,14 @@ type Claims struct {
 // NewAuthService creates a new auth service
 func NewAuthService(
 	merchantRepo repository.MerchantRepository,
+	adminRepo repository.AdminRepository,
 	cacheClient cache.Client,
 	jwtConfig config.JWTConfig,
 	logger *logger.Logger,
 ) *AuthService {
 	return &AuthService{
 		merchantRepo: merchantRepo,
+		adminRepo:    adminRepo,
 		cache:        cacheClient,
 		jwtConfig:    jwtConfig,
 		logger:       logger,
@@ -67,6 +70,15 @@ func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest)
 	apiKeyHash, _ := crypto.HashAPIKey(apiKey)
 	apiSecretHash, _ := crypto.HashAPIKey(apiSecret)
 
+	merchantStatus := "active"
+	if s.adminRepo != nil {
+		if settings, err := s.adminRepo.GetSettings(ctx); err == nil {
+			if !settings.AutoApproveMerchants {
+				merchantStatus = "pending"
+			}
+		}
+	}
+
 	// Create merchant
 	merchant := &models.Merchant{
 		ID:            uuid.New(),
@@ -76,7 +88,7 @@ func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest)
 		PasswordHash:  passwordHash,
 		APIKeyHash:    apiKeyHash,
 		APISecretHash: apiSecretHash,
-		Status:        "active",
+		Status:        merchantStatus,
 		KYCStatus:     "pending",
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
@@ -108,8 +120,8 @@ func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (*mod
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
-	// Check merchant status (admin may set approved; self-registered default is active)
-	if merchant.Status != "active" && merchant.Status != "approved" {
+	// Check merchant status (admin may set approved; self-registered default is active/pending)
+	if merchant.Status != "active" && merchant.Status != "approved" && merchant.Status != "pending" {
 		return nil, fmt.Errorf("account is %s", merchant.Status)
 	}
 
