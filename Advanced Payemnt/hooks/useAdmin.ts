@@ -34,6 +34,7 @@ export interface AdminMerchantDetail {
   phone: string;
   status: string;
   kyc_status: string;
+  kyc_documents?: any;
   created_at: string;
   description: string;
   website: string;

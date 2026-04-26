@@ -59,7 +59,9 @@ export function MerchantDetailSheet({ merchantId, open, onOpenChange, onStatusAp
 
   let kycDocs: any = null;
   try {
-    kycDocs = m?.kyc_documents ? JSON.parse(m.kyc_documents) : null;
+    kycDocs = typeof m?.kyc_documents === 'string' 
+      ? JSON.parse(m.kyc_documents) 
+      : (m?.kyc_documents || null);
   } catch (e) {
     kycDocs = null;
   }
@@ -243,9 +245,9 @@ export function MerchantDetailSheet({ merchantId, open, onOpenChange, onStatusAp
                   Suspend blocks dashboard and API keys. Approve / active restores access (after any mandate checks on your side).
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {m.status === 'pending' && (
+                  {(m.status === 'pending' || m.kyc_status === 'under_review') && (
                     <>
-                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => void applyStatus('approved', 'Merchant approved')}>
+                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => void applyStatus('approved', 'Merchant approved & KYC Verified')}>
                         Approve
                       </Button>
                       <Button size="sm" variant="outline" className="border-destructive/50 text-destructive" onClick={() => void applyStatus('suspended', 'Merchant on hold')}>

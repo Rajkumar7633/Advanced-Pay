@@ -5,13 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Shield, Fingerprint, Image as ImageIcon, CheckCircle, Loader2 } from 'lucide-react';
+import { Shield, Fingerprint, Image as ImageIcon, CheckCircle, Loader2, RefreshCw } from 'lucide-react';
 import api from '@/lib/api-client';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/lib/store/auth';
 
 export function KYCWall() {
-  const { user } = useAuthStore();
+  const { user, fetchUser } = useAuthStore();
   const [aadhaar, setAadhaar] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -26,6 +26,21 @@ export function KYCWall() {
       setIsDone(true);
     }
   }, [user?.kyc_status]);
+
+  // Auto-poll status when in 'Vault Secured' state
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isDone && user?.kyc_status !== 'verified') {
+      interval = setInterval(async () => {
+        try {
+           await fetchUser();
+        } catch (e) {}
+      }, 10000); // Check every 10 seconds
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    }
+  }, [isDone, user?.kyc_status, fetchUser]);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -98,10 +113,18 @@ export function KYCWall() {
               <CheckCircle className="h-8 w-8 text-emerald-500" />
             </div>
             <h2 className="text-xl font-semibold mb-2">Vault Secured</h2>
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-sm mb-6">
               Your sensitive identification documents have been securely transmitted to our compliance team. 
               Please wait until an Administrator approves your request in the Operations Dashboard.
             </p>
+            <div className="flex flex-col gap-4 w-full">
+               <Button variant="outline" className="w-full" onClick={() => fetchUser()}>
+                 <RefreshCw className="mr-2 h-4 w-4" /> Check Status
+               </Button>
+               <Button variant="ghost" className="w-full text-muted-foreground" onClick={() => useAuthStore.getState().logout()}>
+                 Sign Out
+               </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

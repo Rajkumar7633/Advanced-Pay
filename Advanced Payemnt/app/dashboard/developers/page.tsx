@@ -86,9 +86,9 @@ export default function DeveloperStudio() {
     try {
       addLog('request', 'api', `POST /v1/api_keys {"environment": "${env}"}`);
       const res = await api.post('/api-keys', { environment: env });
-      setKeys(prev => [res.data.data, ...prev]);
+      setKeys(prev => [res.data, ...prev]);
       toast.success('Key generated.');
-      addLog('success', 'api', `200 OK: Generated ${env} keyset [${res.data.data.id}]`);
+      addLog('success', 'api', `200 OK: Generated ${env} keyset [${res.data.id}]`);
     } catch {
       addLog('error', 'api', '500 Internal Server Error: Generation rejected.');
     }
@@ -151,12 +151,12 @@ export default function DeveloperStudio() {
                         </div>
                      </div>
 
-                     {keys.map((key) => (
+                     {keys.filter(k => k && k.id).map((key) => (
                         <Card key={key.id} className="bg-[#111111] border-slate-800">
                            <CardContent className="p-4 flex justify-between items-center">
                                <div>
                                   <Badge variant="outline" className={key.environment === 'live' ? 'text-red-400 border-red-500/50' : 'text-emerald-400 border-emerald-500/50'}>
-                                     {key.environment.toUpperCase()}
+                                     {key.environment?.toUpperCase() || 'UNKNOWN'}
                                   </Badge>
                                   <div className="mt-2 font-mono text-xs p-2 bg-black rounded border border-slate-800 break-all w-[300px]">
                                      {key.publishable_key}

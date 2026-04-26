@@ -6,16 +6,17 @@ A complete, production-ready payment gateway backend built with Golang following
 
 ### Core Features
 - ✅ **Clean Architecture** - Domain-driven design with separation of concerns
+- ✅ **Admin God-Mode** - Complete operational controls, real-time merchant onboarding, and KYC verification override.
+- ✅ **Dynamic KYC Vault** - Biometric hardware signatures and secure asynchronous document submission with real-time UI polling.
+- ✅ **Isomorphic Auth Guards** - Robust React/Zustand session persistence preventing stale cached views during permission changes.
+- ✅ **Headless Gateway APIs** - Dynamic Publishable/Secret Keys mapping with strict Type-level definitions.
+- ✅ **Mock Traffic Engine** - Battle-testing platform throughput safely using simulated traffic workers.
 - ✅ **JWT Authentication** - Secure merchant authentication
 - ✅ **Payment Processing** - Create, capture, refund payments
 - ✅ **Transaction Management** - Complete transaction lifecycle
 - ✅ **Merchant Management** - Profile and settings management
-- ✅ **Webhook System** - Event-driven architecture
-- ✅ **Rate Limiting** - Redis-based rate limiting
-- ✅ **Logging** - Structured logging with Zap
-- ✅ **Database Migrations** - PostgreSQL schema management
+- ✅ **Database Migrations** - Robust PostgreSQL schemas handling strict Go type scans (null safety).
 - ✅ **Docker Support** - Complete containerization
-- ✅ **Kafka Integration** - Event streaming
 
 ### Security Features
 - Password hashing with bcrypt
@@ -279,12 +280,11 @@ Authorization: Bearer YOUR_ACCESS_TOKEN
 
 ### Design Patterns Used
 
+- **Isomorphic Mount Synchronization**: Resolves React Hydration discrepancies for API overlay states.
 - **Repository Pattern**: Data access abstraction
 - **Dependency Injection**: Loose coupling
 - **Service Layer**: Business logic separation
-- **Factory Pattern**: Object creation
-- **Strategy Pattern**: Payment routing
-- **Observer Pattern**: Event publishing
+- **Long-Polling Lifecycle**: Enables the locked 'Vault Secured' KYC screen to dynamically bypass when Admin signals 'Verified'.
 
 ## 🧪 Testing
 
@@ -392,7 +392,9 @@ For support, email support@yourgateway.com
 
 - [x] Core payment processing
 - [x] JWT authentication
-- [x] Basic CRUD operations
+- [x] Admin dashboard (Operations, Compliance, Identity)
+- [x] KYC Submission & Asynchronous Verification Flows
+- [x] Platform State Hydration
 - [ ] AI-powered smart routing
 - [ ] Voice payment confirmation
 - [ ] Blockchain settlement
@@ -400,7 +402,6 @@ For support, email support@yourgateway.com
 - [ ] Multi-currency support
 - [ ] International payments
 - [ ] GraphQL API
-- [ ] Admin dashboard
 
 ## 📈 Performance
 

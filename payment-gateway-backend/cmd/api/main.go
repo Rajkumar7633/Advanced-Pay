@@ -121,7 +121,8 @@ func main() {
 	vaultHandler := handlers.NewVaultHandler(vaultService, log)
 	websocketHandler := handlers.NewWebsocketHandler(pulseHub, log)
 	
-	adminService := service.NewAdminService(adminRepo, authService, log)
+	emailService := service.NewEmailService(cfg.SMTP, log)
+	adminService := service.NewAdminService(adminRepo, authService, emailService, log)
 	adminHandler := handlers.NewAdminHandler(adminService, cacheClient, log, cfg.JWT.Secret, cfg.Server.AdminEmail, cfg.Server.AdminPassword)
 	subscriptionHandler := handlers.NewSubscriptionHandler(subscriptionService, log)
 	disputeHandler := handlers.NewDisputeHandler(disputeRepo, log)

@@ -17,6 +17,14 @@ type Config struct {
 	JWT      JWTConfig
 	Payment  PaymentConfig
 	MLServices MLServicesConfig
+	SMTP     SMTPConfig
+}
+
+type SMTPConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
 }
 
 type MLServicesConfig struct {
@@ -161,6 +169,12 @@ func LoadConfig() (*Config, error) {
 		MLServices: MLServicesConfig{
 			FraudURL: viper.GetString("ML_SERVICES_FRAUD_URL"),
 		},
+		SMTP: SMTPConfig{
+			Host:     viper.GetString("SMTP_HOST"),
+			Port:     viper.GetInt("SMTP_PORT"),
+			User:     viper.GetString("SMTP_USER"),
+			Password: viper.GetString("SMTP_PASSWORD"),
+		},
 	}
 
 	return cfg, nil
@@ -213,4 +227,10 @@ func setDefaults() {
 
 	// ML defaults
 	viper.SetDefault("ML_SERVICES_FRAUD_URL", "http://localhost:8000")
+
+	// SMTP defaults
+	viper.SetDefault("SMTP_HOST", "smtp.gmail.com")
+	viper.SetDefault("SMTP_PORT", 587)
+	viper.SetDefault("SMTP_USER", "")
+	viper.SetDefault("SMTP_PASSWORD", "")
 }

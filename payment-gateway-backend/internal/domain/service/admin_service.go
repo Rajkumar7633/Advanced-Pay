@@ -12,13 +12,15 @@ import (
 type AdminService struct {
 	adminRepo repository.AdminRepository
 	auth      *AuthService
+	email     *EmailService
 	logger    *logger.Logger
 }
 
-func NewAdminService(adminRepo repository.AdminRepository, auth *AuthService, logger *logger.Logger) *AdminService {
+func NewAdminService(adminRepo repository.AdminRepository, auth *AuthService, email *EmailService, logger *logger.Logger) *AdminService {
 	return &AdminService{
 		adminRepo: adminRepo,
 		auth:      auth,
+		email:     email,
 		logger:    logger,
 	}
 }
@@ -37,16 +39,29 @@ func (s *AdminService) GetMerchantDetail(ctx context.Context, merchantID string)
 
 func (s *AdminService) UpdateMerchantStatus(ctx context.Context, merchantID string, status string) error {
 	s.logger.Info("Admin updating merchant status", "merchant_id", merchantID, "new_status", status)
+	
+	// Fetch previous details to see if this is an activation
+	merchant, err := s.adminRepo.GetMerchantDetail(ctx, merchantID)
+	if err != nil {
+		s.logger.Warn("Could not fetch merchant details for email dispatch", "error", err)
+	}
+
 	if err := s.adminRepo.UpdateMerchantStatus(ctx, merchantID, status); err != nil {
 		return err
 	}
+
+	// Trigger specific actions based on the new status
 	if status == "suspended" && s.auth != nil {
 		if id, err := uuid.Parse(merchantID); err == nil {
 			if invErr := s.auth.InvalidateSessions(ctx, id); invErr != nil {
 				s.logger.Error("invalidate sessions after suspend", "merchant_id", merchantID, "error", invErr)
 			}
 		}
+	} else if status == "active" && merchant != nil && s.email != nil {
+		// Asynchronously dispatch the verification email so UI doesn't block
+		go s.email.SendApprovalEmail(merchant.Email)
 	}
+
 	return nil
 }
 
