@@ -61,8 +61,8 @@ func (h *FraudHandler) GetFactors(c *gin.Context) {
 func (h *FraudHandler) GetAdminFraudSweeps(c *gin.Context) {
 	// SuperAdmin authentication validation happens in middleware prior to this call
 	
-	// Fetch transactions blocked mathematically (e.g. >= 80)
-	highRiskTxs, err := h.transactions.GetHighRiskTransactions(c.Request.Context(), 80)
+	// Fetch transactions with elevated fraud score (>= 30)
+	highRiskTxs, err := h.transactions.GetHighRiskTransactions(c.Request.Context(), 30)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to extract core ML array traces"})
 		return

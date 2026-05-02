@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Bot, Send, X, Sparkles, User, Loader2, Minimize2, Maximizar2 } from 'lucide-react';
+import { Bot, Send, X, Sparkles, User, Loader2, Zap, CheckCircle2, XCircle, ShieldAlert, UserCheck, UserX, Scale, Banknote } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { merchantsApi } from '@/lib/api';
 import axios from 'axios';
@@ -9,19 +9,54 @@ import axios from 'axios';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  action?: ActionPayload | null;
+  actionResult?: 'success' | 'error' | 'pending' | null;
 }
+
+interface ActionPayload {
+  type: string;
+  label: string;
+  params: Record<string, string>;
+}
+
+const ACTION_ICONS: Record<string, any> = {
+  REFUND_TRANSACTION: Banknote,
+  SUSPEND_MERCHANT: UserX,
+  APPROVE_MERCHANT: UserCheck,
+  RESOLVE_DISPUTE: Scale,
+  APPROVE_SETTLEMENT: CheckCircle2,
+};
+
+const ACTION_COLORS: Record<string, string> = {
+  REFUND_TRANSACTION: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
+  SUSPEND_MERCHANT: 'border-red-500/40 bg-red-500/10 text-red-300',
+  APPROVE_MERCHANT: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
+  RESOLVE_DISPUTE: 'border-blue-500/40 bg-blue-500/10 text-blue-300',
+  APPROVE_SETTLEMENT: 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300',
+};
+
+const ACTION_BTN_COLORS: Record<string, string> = {
+  REFUND_TRANSACTION: 'bg-amber-600 hover:bg-amber-700',
+  SUSPEND_MERCHANT: 'bg-red-600 hover:bg-red-700',
+  APPROVE_MERCHANT: 'bg-emerald-600 hover:bg-emerald-700',
+  RESOLVE_DISPUTE: 'bg-blue-600 hover:bg-blue-700',
+  APPROVE_SETTLEMENT: 'bg-indigo-600 hover:bg-indigo-700',
+};
 
 export function AiCopilot({ isAdmin = false }: { isAdmin?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
-      { role: 'assistant', content: 'Initialization complete. I am connected to the Advanced Pay internal cluster. How can I assist you with your operations today?' }
+      { role: 'assistant', content: isAdmin
+          ? 'SuperAdmin Core AI online. I have full platform access. I can analyze data, manage merchants, force refunds, and resolve disputes on your command.'
+          : 'Initialization complete. I am connected to the Advanced Pay internal cluster. How can I assist you with your operations today?'
+      }
   ]);
   const [isTyping, setIsTyping] = useState(false);
+  const [executingIdx, setExecutingIdx] = useState<number | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto scroll
   useEffect(() => {
      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -36,7 +71,6 @@ export function AiCopilot({ isAdmin = false }: { isAdmin?: boolean }) {
       setIsTyping(true);
 
       try {
-          // Fetch dynamic context
           let liveContext = {};
           try {
              if (isAdmin) {
@@ -47,10 +81,15 @@ export function AiCopilot({ isAdmin = false }: { isAdmin?: boolean }) {
                      axios.get('/api/v1/admin/merchants', { headers }).catch(() => ({ data: [] })),
                      axios.get('/api/v1/admin/disputes', { headers }).catch(() => ({ data: [] }))
                  ]);
+                 // Safely normalize arrays regardless of backend response shape
+                 const merchantsArr = Array.isArray(merchants.data) ? merchants.data : (merchants.data?.data || []);
+                 const disputesArr  = Array.isArray(disputes.data)  ? disputes.data  : (disputes.data?.data  || []);
                  liveContext = { 
                      admin_system_metrics: metrics.data,
-                     platform_merchants: merchants.data,
-                     open_disputes: disputes.data
+                     platform_merchants: merchantsArr,
+                     // Split disputes so AI never confuses resolved vs open
+                     open_disputes: disputesArr.filter((d: any) => d.status === 'open' || d.status === 'under_review'),
+                     all_disputes: disputesArr
                  };
              } else {
                  const [tData, dData, sData] = await Promise.all([
@@ -68,24 +107,22 @@ export function AiCopilot({ isAdmin = false }: { isAdmin?: boolean }) {
              console.error("Context fetch failed, AI will operate without live context.", e);
           }
 
-          // Send to Secure Server function
           const res = await fetch('/api/ai', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  prompt: userQuery,
-                  context: liveContext,
-                  isAdmin: isAdmin
-              })
+              body: JSON.stringify({ prompt: userQuery, context: liveContext, isAdmin })
           });
 
           const data = await res.json();
           
-          if (!res.ok) {
-              throw new Error(data.error || "System failure");
-          }
+          if (!res.ok) throw new Error(data.error || "System failure");
 
-          setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+          setMessages(prev => [...prev, { 
+              role: 'assistant', 
+              content: data.response,
+              action: data.action || null,
+              actionResult: data.action ? 'pending' : null
+          }]);
 
       } catch (err: any) {
           setMessages(prev => [...prev, { role: 'assistant', content: `**CRITICAL ERROR:** ${err.message}` }]);
@@ -94,14 +131,54 @@ export function AiCopilot({ isAdmin = false }: { isAdmin?: boolean }) {
       }
   };
 
-  // Convert simple markdown roughly (Bold and basic lists)
+  const handleExecuteAction = async (msgIdx: number, action: ActionPayload) => {
+      setExecutingIdx(msgIdx);
+      try {
+          const adminToken = isAdmin ? (sessionStorage.getItem('admin_token') || '') : '';
+          const res = await fetch('/api/ai/action', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ actionType: action.type, params: action.params, adminToken })
+          });
+
+          const result = await res.json();
+
+          setMessages(prev => prev.map((m, i) => {
+              if (i === msgIdx) {
+                  return { ...m, actionResult: res.ok ? 'success' : 'error' };
+              }
+              return m;
+          }));
+
+          // Append outcome message
+          const outcomeMsg = res.ok
+              ? `✅ **Action executed successfully:** ${action.label}`
+              : `❌ **Action failed:** ${result.error}`;
+          setMessages(prev => [...prev, { role: 'assistant', content: outcomeMsg }]);
+
+      } catch (err: any) {
+          setMessages(prev => prev.map((m, i) => i === msgIdx ? { ...m, actionResult: 'error' } : m));
+          setMessages(prev => [...prev, { role: 'assistant', content: `❌ **Execution Error:** ${err.message}` }]);
+      } finally {
+          setExecutingIdx(null);
+      }
+  };
+
   const formatText = (text: string) => {
-      const parts = text.split(/(\*\*.*?\*\*)/g);
-      return parts.map((part, i) => {
-         if (part.startsWith('**') && part.endsWith('**')) {
-             return <strong key={i} className="text-white font-bold">{part.slice(2, -2)}</strong>;
-         }
-         return <span key={i}>{part}</span>;
+      const lines = text.split('\n');
+      return lines.map((line, li) => {
+          const parts = line.split(/(\*\*.*?\*\*)/g);
+          return (
+              <span key={li}>
+                  {parts.map((part, i) => {
+                      if (part.startsWith('**') && part.endsWith('**')) {
+                          return <strong key={i} className="text-white font-bold">{part.slice(2, -2)}</strong>;
+                      }
+                      return <span key={i}>{part}</span>;
+                  })}
+                  {li < lines.length - 1 && <br />}
+              </span>
+          );
       });
   };
 
@@ -121,7 +198,7 @@ export function AiCopilot({ isAdmin = false }: { isAdmin?: boolean }) {
       {/* Chat Window Panel */}
       <div 
          className={cn(
-            "fixed bottom-6 right-6 z-50 w-[400px] h-[600px] max-h-[80vh] flex flex-col bg-[#0f1219] border border-indigo-500/30 rounded-2xl shadow-2xl transition-all duration-500 origin-bottom-right overflow-hidden",
+            "fixed bottom-6 right-6 z-50 w-[420px] h-[620px] max-h-[85vh] flex flex-col bg-[#0f1219] border border-indigo-500/30 rounded-2xl shadow-2xl transition-all duration-500 origin-bottom-right overflow-hidden",
             isOpen ? "scale-100 opacity-100" : "scale-50 opacity-0 pointer-events-none"
          )}
       >
@@ -132,10 +209,12 @@ export function AiCopilot({ isAdmin = false }: { isAdmin?: boolean }) {
                     <Bot className="w-5 h-5 text-white" />
                  </div>
                  <div>
-                    <h3 className="text-sm font-bold text-white tracking-wide">Advanced Pay Copilot</h3>
+                    <h3 className="text-sm font-bold text-white tracking-wide">
+                        {isAdmin ? 'SuperAdmin Core AI' : 'Advanced Pay Copilot'}
+                    </h3>
                     <p className="text-[10px] text-indigo-300 font-mono tracking-widest uppercase flex items-center gap-1">
                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                       Gemini Core Active
+                       {isAdmin ? 'God-Mode · Action-Capable' : 'Gemini Core Active'}
                     </p>
                  </div>
               </div>
@@ -154,11 +233,63 @@ export function AiCopilot({ isAdmin = false }: { isAdmin?: boolean }) {
                      )}>
                          {m.role === 'user' ? <User className="w-4 h-4 text-slate-300" /> : <Bot className="w-4 h-4 text-indigo-400" />}
                      </div>
-                     <div className={cn(
-                         "px-4 py-3 rounded-2xl max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap",
-                         m.role === 'user' ? "bg-slate-800 text-slate-200 rounded-tr-none" : "bg-indigo-950/30 border border-indigo-500/20 text-indigo-100 rounded-tl-none shadow-[inset_0_0_20px_rgba(79,70,229,0.05)]"
-                     )}>
-                         {m.role === 'assistant' ? formatText(m.content) : m.content}
+                     <div className="flex flex-col gap-2 max-w-[80%]">
+                         <div className={cn(
+                             "px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap",
+                             m.role === 'user' ? "bg-slate-800 text-slate-200 rounded-tr-none" : "bg-indigo-950/30 border border-indigo-500/20 text-indigo-100 rounded-tl-none shadow-[inset_0_0_20px_rgba(79,70,229,0.05)]"
+                         )}>
+                             {m.role === 'assistant' ? formatText(m.content) : m.content}
+                         </div>
+
+                         {/* Action Confirmation Card */}
+                         {m.action && m.actionResult === 'pending' && (() => {
+                             const ActionIcon = ACTION_ICONS[m.action.type] || Zap;
+                             const colorClass = ACTION_COLORS[m.action.type] || 'border-slate-500/40 bg-slate-500/10 text-slate-300';
+                             const btnClass = ACTION_BTN_COLORS[m.action.type] || 'bg-indigo-600 hover:bg-indigo-700';
+                             return (
+                                 <div className={cn("rounded-xl border p-3 text-xs space-y-2", colorClass)}>
+                                     <div className="flex items-center gap-2 font-bold">
+                                         <Zap className="w-3.5 h-3.5" />
+                                         AI Action Detected
+                                     </div>
+                                     <div className="flex items-center gap-2 bg-black/20 rounded-lg px-2 py-1.5">
+                                         <ActionIcon className="w-3.5 h-3.5 shrink-0" />
+                                         <span className="font-mono font-bold">{m.action.label}</span>
+                                     </div>
+                                     <p className="text-[10px] opacity-70">Review and confirm before executing this action.</p>
+                                     <div className="flex gap-2">
+                                         <button
+                                             disabled={executingIdx === idx}
+                                             onClick={() => handleExecuteAction(idx, m.action!)}
+                                             className={cn("flex-1 py-1.5 rounded-lg font-bold text-white text-[11px] transition-colors flex items-center justify-center gap-1.5", btnClass)}
+                                         >
+                                             {executingIdx === idx
+                                                 ? <><Loader2 className="w-3 h-3 animate-spin" /> Executing...</>
+                                                 : <><CheckCircle2 className="w-3 h-3" /> Confirm & Execute</>
+                                             }
+                                         </button>
+                                         <button
+                                             onClick={() => setMessages(prev => prev.map((msg, i) => i === idx ? { ...msg, actionResult: 'error' } : msg))}
+                                             className="px-3 py-1.5 rounded-lg font-bold text-[11px] bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors flex items-center gap-1"
+                                         >
+                                             <XCircle className="w-3 h-3" /> Cancel
+                                         </button>
+                                     </div>
+                                 </div>
+                             );
+                         })()}
+
+                         {/* Action Result Badge */}
+                         {m.action && m.actionResult === 'success' && (
+                             <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-bold">
+                                 <CheckCircle2 className="w-3 h-3" /> Action executed
+                             </div>
+                         )}
+                         {m.action && m.actionResult === 'error' && (
+                             <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-bold">
+                                 <XCircle className="w-3 h-3" /> Action cancelled
+                             </div>
+                         )}
                      </div>
                  </div>
              ))}
@@ -176,6 +307,25 @@ export function AiCopilot({ isAdmin = false }: { isAdmin?: boolean }) {
              <div ref={messagesEndRef} />
           </div>
 
+          {/* Suggested Actions Bar (admin only) */}
+          {isAdmin && (
+              <div className="px-3 pt-2 flex gap-1.5 overflow-x-auto scrollbar-none border-t border-slate-800/50">
+                  {[
+                      { label: '🔍 Show merchants', prompt: 'List all merchants and their status' },
+                      { label: '⚠️ Open disputes', prompt: 'Show all open disputes' },
+                      { label: '📊 Platform stats', prompt: 'Give me a summary of global platform metrics' },
+                  ].map(s => (
+                      <button
+                          key={s.label}
+                          onClick={() => setInput(s.prompt)}
+                          className="shrink-0 text-[10px] px-2.5 py-1 rounded-full border border-slate-700 text-slate-400 hover:border-indigo-500/60 hover:text-indigo-300 transition-colors whitespace-nowrap"
+                      >
+                          {s.label}
+                      </button>
+                  ))}
+              </div>
+          )}
+
           {/* Input Area */}
           <div className="p-4 bg-[#0a0d14] border-t border-slate-800">
              <form onSubmit={handleSubmit} className="relative flex items-center">
@@ -183,7 +333,7 @@ export function AiCopilot({ isAdmin = false }: { isAdmin?: boolean }) {
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Ask Copilot about routing, fraud, or code..."
+                    placeholder={isAdmin ? "Command the platform... e.g. 'Refund TX-abc123'" : "Ask Copilot about routing, fraud, or payments..."}
                     className="w-full bg-[#111622] border border-slate-700 text-sm text-slate-200 rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:border-indigo-500 transition-colors"
                  />
                  <button 

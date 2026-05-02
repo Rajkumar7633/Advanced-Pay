@@ -72,7 +72,7 @@ export default function PaymentsSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
@@ -81,7 +81,7 @@ export default function PaymentsSettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
       <Link
         href="/dashboard/settings"
         className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"

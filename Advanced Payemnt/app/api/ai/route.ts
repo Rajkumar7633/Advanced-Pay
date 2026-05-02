@@ -23,9 +23,19 @@ The administrator has provided the following live JSON telemetry from the global
 ${JSON.stringify(context || { status: "No recent data found" })}
 \`\`\`
 
-If the user asks about global metrics, look closely at the \`admin_system_metrics\` block. If they ask about merchants, look at the \`platform_merchants\` block. If they ask about chargebacks, look at the \`open_disputes\` block.
+If the user asks about global metrics, look closely at the \`admin_system_metrics\` block. If they ask about merchants, look at the \`platform_merchants\` block.
+For disputes: use \`open_disputes\` ONLY for genuinely unresolved disputes (status: open or under_review). Use \`all_disputes\` if the user asks to see all disputes including resolved ones. NEVER label a dispute with status won/lost/closed as an "open" dispute.
 If the JSON payload is empty or contains no records, you MUST state that there is no data available. DO NOT invent, hallucinate, or generate any demo data under any circumstances.
 Always respond clearly using clean Markdown formatting. Use bolding and lists to organize complex datasets. Be authoritative, executive, and highly helpful. Do not mention that you received context data as JSON.
+
+**ACTIONABLE COMMANDS:**
+You can also detect and propose platform actions. If the user's message matches a command, you MUST include an \`action\` object in your JSON response.
+Supported actions:
+- REFUND_TRANSACTION: triggers "refund", "force refund", "chargeback" + a transaction ID
+- SUSPEND_MERCHANT: triggers "suspend", "block", "deactivate" + a merchant name or ID
+- APPROVE_MERCHANT: triggers "approve", "activate", "enable" + a merchant name or ID
+- RESOLVE_DISPUTE: triggers "resolve dispute", "close dispute", "settle dispute" + dispute ID + outcome (won/lost/closed)
+- APPROVE_SETTLEMENT: triggers "approve settlement", "release settlement" + settlement ID
     ` 
     : `
 You are the **Advanced Pay AI Copilot**, an elite banking domain expert and platform assistant natively integrated into an advanced Next.js payment gateway dashboard. 
@@ -41,29 +51,65 @@ ${JSON.stringify(context || { status: "No recent data found" })}
 If the user asks about revenue, look closely at the \`dashboard_metrics\` and \`account_stats\` blocks. If they ask about recent payments, look at the \`recent_transactions\` block. 
 If the JSON payload is empty or contains no records, you MUST state that there is no data available. DO NOT invent, hallucinate, or generate any demo data under any circumstances.
 Always respond clearly using clean Markdown formatting. Use bolding and lists to organize complex datasets (like listing out fraud vectors or financial breakdowns). Be authoritative but highly helpful. Do not mention that you received context data as JSON, just treat it as your innate knowledge of their platform.
+
+**ACTIONABLE COMMANDS:**
+You can also detect and propose merchant actions. If the user's message matches a command, include an \`action\` object.
+Supported actions:
+- REFUND_TRANSACTION: triggers "refund", "force refund" + a transaction ID from the context
     `;
 
-    // Make direct native fetch to Gemini 2.5 Flash to avoid SDK dependency issues
+    // Use responseSchema to force structured JSON output with optional action detection
+    const geminiPayload = {
+      contents: [{
+          role: "user",
+          parts: [{ text: prompt }]
+      }],
+      systemInstruction: {
+          role: "system",
+          parts: [{ text: systemInstruction }]
+      },
+      generationConfig: {
+          temperature: 0.1,
+          topK: 10,
+          maxOutputTokens: 2000,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              text: { type: "STRING", description: "The full markdown response to display to the user." },
+              action: {
+                type: "OBJECT",
+                nullable: true,
+                description: "If the user requested a platform action, populate this. Otherwise omit it.",
+                properties: {
+                  type: {
+                    type: "STRING",
+                    enum: ["REFUND_TRANSACTION", "SUSPEND_MERCHANT", "APPROVE_MERCHANT", "RESOLVE_DISPUTE", "APPROVE_SETTLEMENT"]
+                  },
+                  label: { type: "STRING", description: "Human-readable action label, e.g. 'Refund Transaction abc-123'" },
+                  params: {
+                    type: "OBJECT",
+                    description: "Parameters needed to execute the action",
+                    properties: {
+                      id: { type: "STRING" },
+                      status: { type: "STRING" },
+                      outcome: { type: "STRING" }
+                    }
+                  }
+                },
+                required: ["type", "label", "params"]
+              }
+            },
+            required: ["text"]
+          }
+      }
+    };
+
+    // Make direct native fetch to Gemini 2.5 Flash
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{
-            role: "user",
-            parts: [{ text: prompt }]
-        }],
-        systemInstruction: {
-            role: "system",
-            parts: [{ text: systemInstruction }]
-        },
-        generationConfig: {
-            temperature: 0.1,
-            topK: 10,
-            maxOutputTokens: 2000,
-        }
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(geminiPayload)
     });
 
     if (!response.ok) {
@@ -73,9 +119,18 @@ Always respond clearly using clean Markdown formatting. Use bolding and lists to
     }
 
     const data = await response.json();
-    const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
+    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{"text":"No response generated."}';
 
-    return NextResponse.json({ response: aiText });
+    // Parse the structured JSON response from Gemini
+    let parsed: { text: string; action?: any } = { text: rawText };
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      // If Gemini returned plain text instead of JSON, wrap it
+      parsed = { text: rawText };
+    }
+
+    return NextResponse.json({ response: parsed.text, action: parsed.action || null });
 
   } catch (err: any) {
     console.error("AI Route Error:", err);

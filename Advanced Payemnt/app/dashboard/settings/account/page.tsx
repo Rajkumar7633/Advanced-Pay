@@ -116,7 +116,7 @@ export default function AccountSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
@@ -125,7 +125,7 @@ export default function AccountSettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
         <div className="flex items-center gap-4 mb-6">
           <h1 className="text-3xl font-bold text-foreground">Account Settings</h1>

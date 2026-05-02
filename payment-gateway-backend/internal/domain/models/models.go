@@ -14,6 +14,7 @@ import (
 type Transaction struct {
 	ID                uuid.UUID              `json:"id" db:"id"`
 	MerchantID        uuid.UUID              `json:"merchant_id" db:"merchant_id"`
+	MerchantName      string                 `json:"merchant_name,omitempty" db:"merchant_name"`
 	OrderID           string                 `json:"order_id" db:"order_id"`
 	Amount            decimal.Decimal        `json:"amount" db:"amount"`
 	Currency          string                 `json:"currency" db:"currency"`

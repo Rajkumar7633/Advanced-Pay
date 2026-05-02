@@ -78,6 +78,16 @@ export default function AdminOperationsPage() {
     [merchants]
   );
 
+  // Compute per-merchant transaction count from already-fetched transactions
+  const txCountByMerchant = useMemo(() => {
+    const map: Record<string, number> = {};
+    (transactions || []).forEach(t => {
+      // The merchant field is the business name; match by name since list endpoint returns name
+      if (t.merchant) map[t.merchant] = (map[t.merchant] || 0) + 1;
+    });
+    return map;
+  }, [transactions]);
+
   const handleExportTransactions = () => {
     const rows = transactions || [];
     if (!rows.length) {
@@ -204,37 +214,67 @@ export default function AdminOperationsPage() {
                   </p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Merchant</TableHead>
-                      <TableHead>Submitted</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pendingKyc.map((m) => (
-                      <TableRow key={m.id}>
-                        <TableCell className="font-medium">{m.name}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{formatDate(m.date)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-wrap justify-end gap-2">
-                            <Button size="sm" variant="secondary" className="gap-1" onClick={() => setMerchantDetailId(m.id)}>
-                              <Eye className="h-3.5 w-3.5" />
-                              Details
-                            </Button>
-                            <Button size="sm" variant="default" onClick={() => setMerchantStatus(m.id, 'approved')}>
-                              Approve
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => setMerchantStatus(m.id, 'suspended')}>
-                              Hold
-                            </Button>
-                          </div>
-                        </TableCell>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Merchant</TableHead>
+                        <TableHead>Submitted</TableHead>
+                        <TableHead className="text-center">Transactions</TableHead>
+                        <TableHead className="text-right">Volume</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {pendingKyc.map((m) => {
+                        const txCount = txCountByMerchant[m.name] || 0;
+                        const vol = parseFloat(m.volume || '0');
+                        return (
+                        <TableRow key={m.id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-xs font-black text-amber-500">
+                                {m.name?.[0]?.toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-sm">{m.name}</p>
+                                <p className="text-[10px] text-muted-foreground font-mono truncate max-w-[140px]">{m.id?.slice(0, 16)}…</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">{formatDate(m.date)}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="secondary" className={`text-xs font-bold ${
+                              txCount > 0 ? 'bg-blue-500/10 text-blue-600 border-blue-500/20' : 'bg-muted text-muted-foreground'
+                            }`}>
+                              {txCount} tx
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-sm">
+                            {vol > 0 ? (
+                              <span className="text-emerald-600">₹{vol.toLocaleString('en-IN')}</span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <Button size="sm" variant="secondary" className="gap-1" onClick={() => setMerchantDetailId(m.id)}>
+                                <Eye className="h-3.5 w-3.5" />
+                                KYC Docs
+                              </Button>
+                              <Button size="sm" variant="default" onClick={() => setMerchantStatus(m.id, 'approved')}>
+                                Approve
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setMerchantStatus(m.id, 'suspended')}>
+                                Hold
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
               )}
             </CardContent>
           </Card>

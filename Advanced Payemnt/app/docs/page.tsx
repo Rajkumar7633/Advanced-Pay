@@ -4,16 +4,16 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Code, BookOpen, Zap, Key, Webhook, Search, ChevronRight, Copy, Check } from 'lucide-react';
+import { Code, Zap, Webhook, Search, ChevronRight, Copy, Check, Link as LinkIcon, ShieldAlert } from 'lucide-react';
 
 export default function DocsPage() {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const copyCode = (code: string) => {
+  const copyCode = (code: string, id: string) => {
     navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopied(id);
+    setTimeout(() => setCopied(null), 2000);
   };
 
   const docSections = [
@@ -23,44 +23,43 @@ export default function DocsPage() {
       items: [
         { title: 'Introduction', href: '#intro' },
         { title: 'Authentication', href: '#auth' },
-        { title: 'API Keys', href: '#keys' },
       ],
     },
     {
-      title: 'Payments',
+      title: 'Core API',
       icon: Code,
       items: [
-        { title: 'Create Payment', href: '#create' },
-        { title: 'List Payments', href: '#list' },
-        { title: 'Refund Payment', href: '#refund' },
+        { title: 'Create Payment', href: '#create-payment' },
+        { title: 'Capture Payment', href: '#capture-payment' },
+        { title: 'Refund Payment', href: '#refund-payment' },
+        { title: 'Create Payment Link', href: '#payment-links' },
       ],
     },
     {
-      title: 'Webhooks',
+      title: 'Webhooks & Events',
       icon: Webhook,
       items: [
-        { title: 'Overview', href: '#webhook-overview' },
+        { title: 'Register Webhook', href: '#register-webhook' },
         { title: 'Event Types', href: '#events' },
-        { title: 'Webhook Signing', href: '#signing' },
       ],
     },
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-slate-950 text-slate-200">
       {/* Navigation */}
-      <nav className="sticky top-0 z-50 border-b border-border bg-card/50 backdrop-blur">
+      <nav className="sticky top-0 z-50 border-b border-blue-900/30 bg-slate-950/80 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-bold text-lg">
-            <Zap className="w-5 h-5 text-accent" />
-            PaymentGateway Docs
+          <Link href="/" className="flex items-center gap-2 font-bold text-lg text-white">
+            <Zap className="w-5 h-5 text-blue-500" />
+            Advanced Pay Docs
           </Link>
           <div className="hidden md:flex items-center gap-4">
             <Link href="/">
-              <Button variant="ghost">Home</Button>
+              <Button variant="ghost" className="text-slate-300 hover:text-white hover:bg-slate-800">Home</Button>
             </Link>
-            <Link href="/dashboard">
-              <Button className="bg-accent hover:bg-accent/90">Dashboard</Button>
+            <Link href="/merchant/login">
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white border-0">Developer Dashboard</Button>
             </Link>
           </div>
         </div>
@@ -70,12 +69,12 @@ export default function DocsPage() {
         {/* Search */}
         <div className="mb-12">
           <div className="relative max-w-xl mx-auto mb-8">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
             <Input
-              placeholder="Search documentation..."
+              placeholder="Search API documentation..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 py-6 text-base bg-card border-border"
+              className="pl-10 py-6 text-base bg-slate-900 border-slate-800 text-white placeholder:text-slate-500 focus-visible:ring-blue-500"
             />
           </div>
         </div>
@@ -88,15 +87,15 @@ export default function DocsPage() {
               return (
                 <div key={i}>
                   <div className="flex items-center gap-2 mb-4">
-                    <Icon className="w-5 h-5 text-accent" />
-                    <h3 className="font-semibold text-foreground">{section.title}</h3>
+                    <Icon className="w-5 h-5 text-blue-500" />
+                    <h3 className="font-semibold text-white">{section.title}</h3>
                   </div>
                   <ul className="space-y-2">
                     {section.items.map((item, j) => (
                       <li key={j}>
                         <Link
                           href={item.href}
-                          className="text-sm text-muted-foreground hover:text-accent transition flex items-center gap-2"
+                          className="text-sm text-slate-400 hover:text-blue-400 transition flex items-center gap-2"
                         >
                           <ChevronRight className="w-3 h-3" />
                           {item.title}
@@ -110,146 +109,165 @@ export default function DocsPage() {
           </div>
 
           {/* Content */}
-          <div className="lg:col-span-3 space-y-12">
+          <div className="lg:col-span-3 space-y-16">
             {/* Introduction */}
-            <section id="intro" className="scroll-mt-20">
-              <h2 className="text-3xl font-bold text-foreground mb-4">Welcome to PaymentGateway API</h2>
-              <p className="text-muted-foreground mb-6">
-                The PaymentGateway API allows you to integrate payment processing into your application with ease.
-                Our API is RESTful and returns JSON responses.
+            <section id="intro" className="scroll-mt-24">
+              <h2 className="text-3xl font-bold text-white mb-4">Advanced Pay API Reference</h2>
+              <p className="text-slate-400 mb-6 leading-relaxed">
+                The Advanced Pay API allows you to programmatically process payments, generate payment links, and manage refunds.
+                Our API is designed around REST conventions, accepting JSON payloads and returning standard JSON responses.
               </p>
-              <div className="bg-card border border-border rounded-lg p-6 space-y-4">
-                <h3 className="font-semibold text-foreground">Base URL</h3>
-                <code className="text-sm text-accent block bg-slate-900/50 p-3 rounded">
-                  https://api.paymentgateway.com/v1
+              <div className="bg-slate-900 border border-blue-900/30 rounded-xl p-6">
+                <h3 className="font-semibold text-white mb-3">Base URL</h3>
+                <code className="text-sm text-blue-400 block bg-black/40 p-3 rounded-lg border border-white/5">
+                  https://api.advancedpay.com/api/v1
                 </code>
               </div>
             </section>
 
             {/* Authentication */}
-            <section id="auth" className="scroll-mt-20">
-              <h2 className="text-3xl font-bold text-foreground mb-4">Authentication</h2>
-              <p className="text-muted-foreground mb-6">
-                All requests must include an Authorization header with your API key.
+            <section id="auth" className="scroll-mt-24">
+              <h2 className="text-3xl font-bold text-white mb-4">Authentication</h2>
+              <p className="text-slate-400 mb-6">
+                Authenticate your API requests by providing your Merchant API Key via the <code className="text-blue-400">Authorization</code> HTTP header.
               </p>
-              <div className="bg-card border border-border rounded-lg p-6 space-y-4 mb-4">
-                <h3 className="font-semibold text-foreground text-sm">Example Request</h3>
-                <div className="bg-slate-900/50 rounded p-4 relative">
-                  <pre className="text-sm text-gray-300 overflow-x-auto">
-{`curl https://api.paymentgateway.com/v1/payments \\
-  -H "Authorization: Bearer pk_live_xyz" \\
-  -H "Content-Type: application/json"`}
-                  </pre>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => copyCode('curl https://api.paymentgateway.com/v1/payments \\\n  -H "Authorization: Bearer pk_live_xyz" \\\n  -H "Content-Type: application/json"')}
-                    className="absolute top-2 right-2"
-                  >
-                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-5 mb-6 flex gap-4">
+                <ShieldAlert className="w-6 h-6 text-blue-400 flex-shrink-0" />
+                <p className="text-sm text-blue-200">
+                  <strong>Security Note:</strong> Your API keys carry high privileges. Never expose them in client-side code (like React/Next.js frontend code) or commit them to GitHub. Always use them from a secure backend server.
+                </p>
+              </div>
+              <div className="bg-slate-900 border border-blue-900/30 rounded-xl overflow-hidden">
+                <div className="bg-slate-800/50 px-4 py-2 border-b border-white/5 flex justify-between items-center">
+                  <span className="text-xs font-mono text-slate-400">cURL Example</span>
+                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-slate-400 hover:text-white" onClick={() => copyCode('Authorization: Bearer mid_live_xxxxxxxx', 'auth')}>
+                    {copied === 'auth' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                   </Button>
                 </div>
-              </div>
-            </section>
-
-            {/* API Keys */}
-            <section id="keys" className="scroll-mt-20">
-              <h2 className="text-3xl font-bold text-foreground mb-4">API Keys</h2>
-              <p className="text-muted-foreground mb-6">
-                Secure your API keys in your environment variables. Never expose them in client-side code.
-              </p>
-              <div className="space-y-4">
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                  <p className="text-sm text-blue-300">
-                    <strong>Tip:</strong> Use different API keys for development (test mode) and production (live mode).
-                  </p>
+                <div className="p-4 overflow-x-auto">
+                  <pre className="text-sm text-slate-300 font-mono">
+                    <span className="text-pink-400">curl</span> https://api.advancedpay.com/api/v1/payments \<br/>
+                    {'  '}-H <span className="text-green-400">"Authorization: Bearer mid_live_xxxxxxxx"</span>
+                  </pre>
                 </div>
-                <code className="text-sm text-accent block bg-slate-900/50 p-3 rounded">
-                  NEXT_PUBLIC_API_KEY=pk_test_xyz
-                </code>
               </div>
             </section>
 
             {/* Create Payment */}
-            <section id="create" className="scroll-mt-20">
-              <h2 className="text-3xl font-bold text-foreground mb-4">Create Payment</h2>
-              <p className="text-muted-foreground mb-6">
-                Create a new payment intent.
-              </p>
-              <div className="bg-card border border-border rounded-lg p-6 space-y-4 mb-4">
-                <h3 className="font-semibold text-foreground">Endpoint</h3>
-                <code className="text-sm text-accent block bg-slate-900/50 p-3 rounded">
-                  POST /v1/payments
-                </code>
+            <section id="create-payment" className="scroll-mt-24">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs font-bold font-mono">POST</span>
+                <h2 className="text-2xl font-bold text-white">Create Payment</h2>
               </div>
-              <div className="bg-card border border-border rounded-lg p-6 space-y-4">
-                <h3 className="font-semibold text-foreground">Request Body</h3>
-                <div className="bg-slate-900/50 rounded p-4 relative">
-                  <pre className="text-sm text-gray-300 overflow-x-auto">
+              <p className="text-slate-400 mb-6">
+                Initialize a direct payment intent. Depending on the payment method, this might require a subsequent capture request.
+              </p>
+              <div className="bg-slate-900 border border-blue-900/30 rounded-xl overflow-hidden mb-6">
+                <div className="bg-slate-800/50 px-4 py-2 border-b border-white/5 flex justify-between items-center">
+                  <span className="text-xs font-mono text-slate-400">Endpoint</span>
+                </div>
+                <div className="p-4">
+                  <code className="text-sm text-slate-300">/api/v1/payments</code>
+                </div>
+              </div>
+
+              <h3 className="font-semibold text-white mb-3">Request Payload</h3>
+              <div className="bg-slate-900 border border-blue-900/30 rounded-xl overflow-hidden">
+                <div className="bg-slate-800/50 px-4 py-2 border-b border-white/5 flex justify-between items-center">
+                  <span className="text-xs font-mono text-slate-400">JSON</span>
+                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-slate-400 hover:text-white" onClick={() => copyCode(`{\n  "order_id": "ORD_99485",\n  "amount": 599.00,\n  "currency": "INR",\n  "payment_method": "upi",\n  "customer_email": "john@example.com",\n  "customer_phone": "9876543210"\n}`, 'create')}>
+                    {copied === 'create' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  </Button>
+                </div>
+                <div className="p-4 overflow-x-auto">
+                  <pre className="text-sm text-slate-300 font-mono">
 {`{
-  "amount": 5999,
+  "order_id": "ORD_99485",
+  "amount": 599.00,
   "currency": "INR",
-  "description": "Premium Subscription",
-  "customer_email": "user@example.com",
-  "return_url": "https://yoursite.com/success"
+  "payment_method": "upi",      // "upi" or "card"
+  "customer_email": "john@example.com",
+  "customer_phone": "9876543210"
 }`}
                   </pre>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => copyCode('{\n  "amount": 5999,\n  "currency": "INR",\n  "description": "Premium Subscription",\n  "customer_email": "user@example.com",\n  "return_url": "https://yoursite.com/success"\n}')}
-                    className="absolute top-2 right-2"
-                  >
-                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                </div>
+              </div>
+            </section>
+
+            {/* Payment Links */}
+            <section id="payment-links" className="scroll-mt-24">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs font-bold font-mono">POST</span>
+                <h2 className="text-2xl font-bold text-white">Create Payment Link</h2>
+              </div>
+              <p className="text-slate-400 mb-6">
+                Generate a hosted checkout URL to securely accept payments from customers without building a UI.
+              </p>
+              
+              <div className="bg-slate-900 border border-blue-900/30 rounded-xl overflow-hidden">
+                <div className="bg-slate-800/50 px-4 py-2 border-b border-white/5 flex justify-between items-center">
+                  <span className="text-xs font-mono text-slate-400">JSON Request (/api/v1/payment-links)</span>
+                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-slate-400 hover:text-white" onClick={() => copyCode(`{\n  "amount": 1499.00,\n  "description": "Annual Premium Plan"\n}`, 'link')}>
+                    {copied === 'link' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                   </Button>
+                </div>
+                <div className="p-4 overflow-x-auto">
+                  <pre className="text-sm text-slate-300 font-mono">
+{`{
+  "amount": 1499.00,
+  "description": "Annual Premium Plan"
+}`}
+                  </pre>
                 </div>
               </div>
             </section>
 
             {/* Webhooks */}
-            <section id="webhook-overview" className="scroll-mt-20">
-              <h2 className="text-3xl font-bold text-foreground mb-4">Webhooks</h2>
-              <p className="text-muted-foreground mb-6">
-                Webhooks allow you to be notified of events that happen in your PaymentGateway account.
+            <section id="register-webhook" className="scroll-mt-24">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs font-bold font-mono">POST</span>
+                <h2 className="text-2xl font-bold text-white">Register Webhook</h2>
+              </div>
+              <p className="text-slate-400 mb-6">
+                Webhooks allow your system to be notified asynchronously when events happen in your Advanced Pay account.
               </p>
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-semibold text-foreground mb-3">Common Events</h3>
-                  <ul className="space-y-2 text-sm">
-                    <li className="text-muted-foreground">
-                      <strong className="text-foreground">payment.completed</strong> - Payment successfully processed
-                    </li>
-                    <li className="text-muted-foreground">
-                      <strong className="text-foreground">payment.failed</strong> - Payment processing failed
-                    </li>
-                    <li className="text-muted-foreground">
-                      <strong className="text-foreground">payment.refunded</strong> - Payment was refunded
-                    </li>
-                    <li className="text-muted-foreground">
-                      <strong className="text-foreground">settlement.completed</strong> - Settlement processed
-                    </li>
-                  </ul>
+              
+              <div className="bg-slate-900 border border-blue-900/30 rounded-xl overflow-hidden mb-12">
+                <div className="bg-slate-800/50 px-4 py-2 border-b border-white/5 flex justify-between items-center">
+                  <span className="text-xs font-mono text-slate-400">JSON Request (/api/v1/webhooks)</span>
+                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-slate-400 hover:text-white" onClick={() => copyCode(`{\n  "url": "https://api.yourdomain.com/callbacks/advanced-pay",\n  "events": ["payment.success", "payment.failed"]\n}`, 'wh')}>
+                    {copied === 'wh' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  </Button>
+                </div>
+                <div className="p-4 overflow-x-auto">
+                  <pre className="text-sm text-slate-300 font-mono">
+{`{
+  "url": "https://api.yourdomain.com/callbacks/advanced-pay",
+  "events": [
+    "payment.success", 
+    "payment.failed"
+  ]
+}`}
+                  </pre>
                 </div>
               </div>
-            </section>
 
-            {/* SDKs */}
-            <section className="scroll-mt-20">
-              <h2 className="text-3xl font-bold text-foreground mb-4">SDKs & Libraries</h2>
+              <h3 id="events" className="text-xl font-bold text-white mb-4 scroll-mt-24">Supported Event Types</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
-                  { name: 'Node.js', lang: 'npm install paymentgateway' },
-                  { name: 'Python', lang: 'pip install paymentgateway' },
-                  { name: 'Go', lang: 'go get github.com/paymentgateway/go-sdk' },
-                  { name: 'Ruby', lang: 'gem install paymentgateway' },
-                ].map((sdk, i) => (
-                  <div key={i} className="bg-card border border-border rounded-lg p-4">
-                    <h4 className="font-semibold text-foreground mb-2">{sdk.name}</h4>
-                    <code className="text-xs text-accent bg-slate-900/50 p-2 rounded block">{sdk.lang}</code>
+                  { name: 'payment.success', desc: 'Triggered when a payment is fully captured and funds are secured.' },
+                  { name: 'payment.failed', desc: 'Triggered when a transaction is declined or blocked by fraud rules.' },
+                  { name: 'payment.refunded', desc: 'Triggered when a full or partial refund is completed.' },
+                  { name: 'dispute.created', desc: 'Triggered when a customer initiates a chargeback.' },
+                ].map((ev, i) => (
+                  <div key={i} className="bg-slate-900 border border-blue-900/20 rounded-xl p-5">
+                    <code className="text-sm text-blue-400 font-bold mb-2 block">{ev.name}</code>
+                    <p className="text-sm text-slate-400">{ev.desc}</p>
                   </div>
                 ))}
               </div>
             </section>
+            
           </div>
         </div>
       </div>

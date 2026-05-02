@@ -25,6 +25,8 @@ import { BlockchainVerification } from '@/components/dashboard/blockchain-verifi
 import { PaymentHubQuickLinks } from '@/components/dashboard/payment-hub-quick-links';
 import { merchantsApi } from '@/lib/api';
 import { toast } from 'sonner';
+import { OnboardingWidget } from '@/components/dashboard/onboarding-widget';
+import { motion } from 'framer-motion';
 
 // Export type to be used by widgets
 export type DashboardRecentTransaction = DashboardOverviewResponse['recent_transactions'][0];
@@ -198,9 +200,13 @@ export default function DashboardPage() {
             <PaymentHubQuickLinks />
           </div>
 
+          {/* Smart Onboarding Guide */}
+          <OnboardingWidget />
+
           {/* KPI Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <Card className="border-border bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800">
+            <motion.div whileHover={{ y: -4 }} transition={{ duration: 0.2 }}>
+              <Card className="border-border bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 h-full">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
                   Total Revenue
@@ -234,8 +240,10 @@ export default function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
+            </motion.div>
 
-            <Card className="border-border">
+            <motion.div whileHover={{ y: -4 }} transition={{ duration: 0.2 }}>
+            <Card className="border-border h-full">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
                   Total Transactions
@@ -260,8 +268,10 @@ export default function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
+            </motion.div>
 
-            <Card className="border-border">
+            <motion.div whileHover={{ y: -4 }} transition={{ duration: 0.2 }}>
+            <Card className="border-border h-full">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
                   Success Rate
@@ -286,8 +296,10 @@ export default function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
+            </motion.div>
 
-            <Card className="border-border">
+            <motion.div whileHover={{ y: -4 }} transition={{ duration: 0.2 }}>
+            <Card className="border-border h-full">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
                   Active Customers
@@ -312,6 +324,7 @@ export default function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
+            </motion.div>
           </div>
 
           {/* Charts */}

@@ -137,10 +137,10 @@ func NewAdminRepository(db *sqlx.DB) AdminRepository {
 func (r *adminRepository) GetSystemMetrics(ctx context.Context) (*AdminSystemMetrics, error) {
 	metrics := &AdminSystemMetrics{}
 
-	// Total Volume (Last 24 Hours)
+	// Total Volume (All Time — includes captured, completed, success statuses)
 	_ = r.db.GetContext(ctx, &metrics.TotalVolume, `
 		SELECT COALESCE(SUM(amount), 0) FROM transactions 
-		WHERE status = 'success' AND created_at >= NOW() - INTERVAL '24 hours'
+		WHERE status IN ('success', 'captured', 'completed')
 	`)
 
 	// Active Merchants

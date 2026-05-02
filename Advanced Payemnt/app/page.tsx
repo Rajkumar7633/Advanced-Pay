@@ -15,14 +15,7 @@ export default function HomePage() {
       color: 'from-blue-500 to-blue-600',
       features: ['Real-time analytics', 'Settlement tracking', 'Transaction management'],
     },
-    {
-      title: 'Checkout Widget',
-      description: 'Customer-facing payment interface with multiple payment methods',
-      icon: CreditCard,
-      href: '/checkout',
-      color: 'from-green-500 to-green-600',
-      features: ['Card payments', 'UPI QR codes', 'Multi-currency support'],
-    },
+
     {
       title: 'Marketing Website',
       description: 'Public-facing landing page and company information',
@@ -122,7 +115,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {applications.map((app, index) => {
             const Icon = app.icon;
             return (

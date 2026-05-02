@@ -363,13 +363,15 @@ func (r *transactionRepository) MarkAsSettled(ctx context.Context, txIDs []uuid.
 func (r *transactionRepository) GetHighRiskTransactions(ctx context.Context, threshold int) ([]*models.Transaction, error) {
 	query := `
 		SELECT 
-			id, merchant_id, order_id, amount, currency, status,
-			payment_method, payment_provider, customer_email, customer_phone,
-			customer_ip, device_fingerprint, fraud_score, routing_decision,
-			metadata, settlement_id, created_at, updated_at
-		FROM transactions 
-		WHERE fraud_score >= $1 
-		ORDER BY created_at DESC LIMIT 50`
+			t.id, t.merchant_id, COALESCE(m.business_name, 'Unknown') as merchant_name,
+			t.order_id, t.amount, t.currency, t.status,
+			t.payment_method, t.payment_provider, t.customer_email, t.customer_phone,
+			t.customer_ip, t.device_fingerprint, t.fraud_score, t.routing_decision,
+			t.metadata, t.settlement_id, t.created_at, t.updated_at
+		FROM transactions t
+		LEFT JOIN merchants m ON t.merchant_id = m.id
+		WHERE t.fraud_score >= $1 
+		ORDER BY t.created_at DESC LIMIT 50`
 
 	var dbTxs []struct {
 		models.Transaction
