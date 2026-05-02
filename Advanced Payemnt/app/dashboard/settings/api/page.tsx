@@ -22,6 +22,7 @@ export default function ApiKeysPage() {
   const [error, setError] = useState('');
   const [showSecrets, setShowSecrets] = useState<{ [key: string]: boolean }>({});
   const [isGenerating, setIsGenerating] = useState(false);
+  const [environment, setEnvironment] = useState<'test' | 'live'>('test');
 
   useEffect(() => {
     loadApiKeys();
@@ -44,16 +45,16 @@ export default function ApiKeysPage() {
 
   const handleGenerateKey = async () => {
     setIsGenerating(true);
+    setError('');
     try {
-      const newKey = {
-        name: `API Key ${new Date().toLocaleDateString()}`,
-        permissions: ['read', 'write']
-      };
-      
-      const res = await merchantsApi.createApiKey(newKey);
+      const res = await merchantsApi.createApiKey({ environment });
       if (res?.data) {
-        setApiKeys([res.data, ...apiKeys]);
-        alert('API key generated successfully!');
+        // Avoid duplicate entries if backend returns the same key
+        setApiKeys(prev => {
+          const exists = prev.some(k => k.id && k.id === res.data.id);
+          return exists ? prev : [res.data, ...prev];
+        });
+        alert(`${environment === 'live' ? 'Live' : 'Test'} API key generated! Save the secret key — it will only be shown once.`);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to generate API key');
@@ -152,20 +153,32 @@ export default function ApiKeysPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="p-4 border border-border rounded-lg bg-muted/50">
-                <h4 className="font-medium text-foreground mb-2">Key Permissions</h4>
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-4 h-4" />
-                    <span>Read Access</span>
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-medium text-foreground mb-2">Environment</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setEnvironment('test')}
+                      className={`p-3 rounded-lg border-2 text-sm font-semibold transition-all ${environment === 'test' ? 'border-yellow-500 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' : 'border-border text-muted-foreground hover:bg-muted'}`}
+                    >
+                      🧪 Test Mode
+                      <p className="text-xs font-normal mt-0.5 opacity-70">Safe for development</p>
+                    </button>
+                    <button
+                      onClick={() => setEnvironment('live')}
+                      className={`p-3 rounded-lg border-2 text-sm font-semibold transition-all ${environment === 'live' ? 'border-green-500 bg-green-500/10 text-green-700 dark:text-green-400' : 'border-border text-muted-foreground hover:bg-muted'}`}
+                    >
+                      🚀 Live Mode
+                      <p className="text-xs font-normal mt-0.5 opacity-70">Real transactions</p>
+                    </button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-4 h-4" />
-                    <span>Write Access</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-4 h-4" />
-                    <span>Settlement Access</span>
+                </div>
+                <div className="p-3 border border-border rounded-lg bg-muted/50">
+                  <h4 className="font-medium text-foreground mb-2 text-sm">Key Permissions</h4>
+                  <div className="space-y-1.5 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2"><Shield className="w-3.5 h-3.5 text-green-500" /><span>Read Access</span></div>
+                    <div className="flex items-center gap-2"><Shield className="w-3.5 h-3.5 text-green-500" /><span>Write Access</span></div>
+                    <div className="flex items-center gap-2"><Shield className="w-3.5 h-3.5 text-green-500" /><span>Settlement Access</span></div>
                   </div>
                 </div>
               </div>
@@ -194,8 +207,8 @@ export default function ApiKeysPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {apiKeys.map((key) => (
-                  <div key={key.id} className="p-4 border border-border rounded-lg space-y-3">
+                {apiKeys.map((key, idx) => (
+                  <div key={key.id || key.publishable_key || idx} className="p-4 border border-border rounded-lg space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium text-foreground">{key.publishable_key}</p>
