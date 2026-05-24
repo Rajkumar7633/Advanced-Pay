@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Search, Plus, Link2, QrCode, Copy, ExternalLink, Trash2 } from 'lucide-react';
 import { formatCurrency, formatDateShort } from '@/lib/formatting';
+import { CURRENCIES } from '@/lib/currencies';
+
 interface PaymentLink {
   id: string;
   amount: number;
@@ -29,6 +31,7 @@ export default function PaymentLinksPage() {
   const [error, setError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [lanIp, setLanIp] = useState<string | null>(null);
+  const [createCurrency, setCreateCurrency] = useState('INR');
 
   useEffect(() => {
     // Fetch LAN IP for QR codes when running on localhost
@@ -262,13 +265,25 @@ export default function PaymentLinksPage() {
             <h2 className="text-xl font-bold mb-4">Create Payment Link</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Amount (₹)</label>
+                <label className="block text-sm font-medium mb-1">Amount</label>
                 <input
                   type="number"
                   className="w-full border rounded p-2"
                   placeholder="100.00"
                   id="amount"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Currency</label>
+                <select
+                  value={createCurrency}
+                  onChange={e => setCreateCurrency(e.target.value)}
+                  className="w-full border rounded p-2 text-sm"
+                >
+                  {CURRENCIES.map(c => (
+                    <option key={c.code} value={c.code}>{c.flag} {c.code} — {c.name}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Description (optional)</label>
@@ -287,7 +302,7 @@ export default function PaymentLinksPage() {
                   onClick={async () => {
                     const amount = Number((document.getElementById('amount') as HTMLInputElement).value);
                     const description = (document.getElementById('description') as HTMLInputElement).value;
-                    await handleCreateLink({ amount, description: description || undefined });
+                    await handleCreateLink({ amount, description: description || undefined, currency: createCurrency } as any);
                   }}
                 >
                   Create Link

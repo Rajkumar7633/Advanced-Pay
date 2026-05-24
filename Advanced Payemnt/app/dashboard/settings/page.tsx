@@ -6,9 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, Lock, Bell, Eye, EyeOff, Copy, RefreshCw, Link2, Trash2, Plus } from 'lucide-react';
+import { AlertCircle, Lock, Bell, Eye, EyeOff, Copy, RefreshCw, Link2, Trash2, Plus, Mail } from 'lucide-react';
 import { merchantsApi, authApi, webhooksApi } from '@/lib/api';
 import { useAuthStore } from '@/lib/store/auth';
+import { KYCUploadSection } from '@/components/dashboard/kyc-upload';
+import { sendEmail, paymentSuccessTemplate } from '@/lib/email-templates';
 
 export default function SettingsPage() {
   const [showSecrets, setShowSecrets] = useState(false);
@@ -340,15 +342,55 @@ export default function SettingsPage() {
                   </div>
 
                   <Button 
-                    className="bg-primary hover:bg-primary/90" 
-                    onClick={handleSaveProfile} 
-                    disabled={saveLoading || isLoading}
-                  >
-                    {saveLoading ? 'Saving...' : 'Save Changes'}
-                  </Button>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                  className="bg-primary hover:bg-primary/90" 
+                  onClick={handleSaveProfile} 
+                  disabled={saveLoading || isLoading}
+                >
+                  {saveLoading ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* KYC Upload */}
+            <KYCUploadSection kycStatus={user?.kyc_status} />
+
+            {/* Email Notifications */}
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Mail className="w-4 h-4" /> Email Notifications</CardTitle>
+                <CardDescription>Configure when you receive email alerts</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {[
+                  { label: 'Payment Received', desc: 'Get notified for every successful payment', key: 'payment_success' },
+                  { label: 'Dispute Opened', desc: 'Alert when a chargeback is raised', key: 'dispute_opened' },
+                  { label: 'Settlement Released', desc: 'Alert when funds are settled to your bank', key: 'settlement_released' },
+                  { label: 'Failed Payment', desc: 'Alert for declined or failed transactions', key: 'payment_failed' },
+                ].map(item => (
+                  <div key={item.key} className="flex items-center justify-between p-3 rounded-lg border border-border">
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-xs text-muted-foreground">{item.desc}</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" defaultChecked className="sr-only peer" />
+                      <div className="w-9 h-5 bg-muted rounded-full peer peer-checked:bg-primary transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                    </label>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" onClick={async () => {
+                  const ok = await sendEmail(
+                    profile?.email || 'test@example.com',
+                    '🧪 Test Email from Advanced Pay',
+                    '<h2>Email notifications are working!</h2><p>This is a test from your Advanced Pay dashboard.</p>'
+                  );
+                  alert(ok ? 'Test email sent! Check your inbox.' : 'Failed — add RESEND_API_KEY to .env.local');
+                }}>
+                  Send Test Email
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
             {/* API Keys Tab */}
             <TabsContent value="api-keys" className="space-y-6">

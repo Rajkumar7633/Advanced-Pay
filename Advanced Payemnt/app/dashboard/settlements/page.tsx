@@ -11,17 +11,20 @@ import {
   Building2, 
   Calendar, 
   Download, 
-  DollarSign, 
   TrendingUp,
-  Wallet,
   Banknote,
   AlertCircle,
   CheckCircle,
   Clock,
   FileText,
+  Shield,
+  ShieldCheck,
+  Loader2,
 } from 'lucide-react';
 import { formatCurrency, formatDateShort } from '@/lib/formatting';
 import { merchantsApi } from '@/lib/api';
+import { generateSettlementInvoice } from '@/lib/pdf-invoice';
+import { generateSettlementProof, getProof, verifyProof, type SettlementProof } from '@/lib/settlement-proof';
 
 type BackendSettlement = {
   id: string;
@@ -56,10 +59,47 @@ export default function SettlementsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showBankDialog, setShowBankDialog] = useState(false);
+  const [proofs, setProofs] = useState<Record<string, SettlementProof>>({});
+  const [proofLoading, setProofLoading] = useState<string | null>(null);
+  const [proofVerified, setProofVerified] = useState<Record<string, boolean | null>>({});
+  const [merchantName, setMerchantName] = useState('Merchant');
+  const [merchantEmail, setMerchantEmail] = useState('merchant@example.com');
 
   useEffect(() => {
     loadData();
+    // Load existing proofs from localStorage
+    const loadProofs = () => {
+      const stored = localStorage.getItem('ap_settlement_proofs');
+      if (stored) setProofs(JSON.parse(stored));
+    };
+    loadProofs();
   }, []);
+
+  const handleDownloadInvoice = (settlement: BackendSettlement) => {
+    generateSettlementInvoice(settlement, merchantName, merchantEmail);
+  };
+
+  const handleGenerateProof = async (settlement: BackendSettlement) => {
+    setProofLoading(settlement.id);
+    try {
+      const proof = await generateSettlementProof(
+        settlement.id,
+        settlement.merchant_id,
+        String(settlement.total_amount),
+        settlement.settlement_date
+      );
+      setProofs(prev => ({ ...prev, [settlement.id]: proof }));
+    } finally {
+      setProofLoading(null);
+    }
+  };
+
+  const handleVerifyProof = async (settlementId: string) => {
+    const proof = proofs[settlementId] || getProof(settlementId);
+    if (!proof) return;
+    const valid = await verifyProof(proof);
+    setProofVerified(prev => ({ ...prev, [settlementId]: valid }));
+  };
 
   const loadData = async () => {
     setIsLoading(true);
@@ -258,7 +298,7 @@ export default function SettlementsPage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
                   <Badge variant={getStatusVariant(settlement.status) as any} className="flex items-center gap-1">
                     {getStatusIcon(settlement.status)}
                     {settlement.status}
@@ -267,6 +307,22 @@ export default function SettlementsPage() {
                     <p className="text-sm font-medium">Net: {formatCurrency(Number(settlement.net_amount ?? 0))}</p>
                     {settlement.fees && Number(settlement.fees) > 0 && (
                       <p className="text-xs text-muted-foreground">Fees: {formatCurrency(Number(settlement.fees))}</p>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5 flex-wrap justify-end">
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleDownloadInvoice(settlement)}>
+                      <Download className="w-3 h-3" /> Invoice
+                    </Button>
+                    {!proofs[settlement.id] ? (
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleGenerateProof(settlement)} disabled={proofLoading === settlement.id}>
+                        {proofLoading === settlement.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Shield className="w-3 h-3" />}
+                        Proof
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" className={`h-7 text-xs gap-1 ${proofVerified[settlement.id] === true ? 'border-green-500 text-green-600' : proofVerified[settlement.id] === false ? 'border-red-500 text-red-600' : ''}`} onClick={() => handleVerifyProof(settlement.id)}>
+                        <ShieldCheck className="w-3 h-3" />
+                        {proofVerified[settlement.id] === true ? 'Verified ✓' : proofVerified[settlement.id] === false ? 'Invalid ✗' : 'Verify'}
+                      </Button>
                     )}
                   </div>
                 </div>

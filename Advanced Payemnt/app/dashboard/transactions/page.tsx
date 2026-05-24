@@ -10,7 +10,8 @@ import {
   Filter,
   Calendar,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  FileText,
 } from 'lucide-react';
 import TransactionDetailModal from '@/components/dashboard/transaction-detail-modal';
 import { TransactionList } from '@/components/transactions/transaction-list';
@@ -18,6 +19,7 @@ import CreatePaymentModal from '@/components/transactions/create-payment-modal';
 import { usePagination } from '@/hooks/usePagination';
 import { Transaction } from '@/lib/api';
 import { merchantsApi } from '@/lib/api';
+import { generateTransactionReceipt } from '@/lib/pdf-invoice';
 
 type BackendTransaction = {
   id: string;
@@ -63,7 +65,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const load = async () => {
       setIsLoading(true);
       setLoadError('');
       try {
@@ -99,8 +101,6 @@ export default function TransactionsPage() {
           fraud_score: t.fraud_score,
         }));
 
-        console.log('Transactions loaded', { rows, mapped, totalFromApi });
-
         if (!cancelled) {
           setTransactions(mapped);
           setTotal(totalFromApi);
@@ -110,9 +110,14 @@ export default function TransactionsPage() {
       } finally {
         if (!cancelled) setIsLoading(false);
       }
-    })();
+    };
+
+    load();
+    // Auto-refresh every 15s so new payments appear without page reload
+    const interval = setInterval(load, 15000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, [page, limit, statusFilter, setTotal]);
 
@@ -228,13 +233,26 @@ export default function TransactionsPage() {
                   </Button>
                 </div>
 
-                <div className="space-y-2 flex items-end">
+                <div className="space-y-2 flex items-end gap-2">
+                  <Button className="w-full" variant="outline" onClick={() => {
+                    if (transactions.length === 0) { alert('No transactions to export.'); return; }
+                    // Export first transaction as PDF receipt demo
+                    generateTransactionReceipt(transactions[0], 'My Business', 'merchant@example.com');
+                  }}>
+                    <FileText className="w-4 h-4 mr-2" />
+                    Export Receipt
+                  </Button>
                   <Button className="w-full bg-accent hover:bg-accent/90" onClick={() => {
-                    const sonner = require('sonner');
-                    sonner.toast.success('Export started. Your download will begin shortly.');
+                    // Export all as CSV
+                    const csv = ['ID,Amount,Status,Method,Date', ...transactions.map(t =>
+                      `${t.id},${t.amount},${t.status},${t.payment_method},${t.created_at}`
+                    )].join('\n');
+                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url; a.download = 'transactions.csv'; a.click();
                   }}>
                     <Download className="w-4 h-4 mr-2" />
-                    Export
+                    Export CSV
                   </Button>
                 </div>
               </div>

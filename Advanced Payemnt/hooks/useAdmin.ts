@@ -135,7 +135,7 @@ export const useAdminMetrics = () =>
       const r = await axios.get(`${API_URL}/admin/metrics`, { headers: getAdminHeaders() });
       return r.data;
     },
-    refetchInterval: false,
+    refetchInterval: 15000, // refresh every 15s — shows new payments live
   });
 
 export const useAdminMerchants = () =>
@@ -145,7 +145,7 @@ export const useAdminMerchants = () =>
       const r = await axios.get(`${API_URL}/admin/merchants`, { headers: getAdminHeaders() });
       return r.data.data || [];
     },
-    refetchInterval: false,
+    refetchInterval: 20000, // refresh merchant list every 20s
   });
 
 export const useAdminMerchantDetail = (merchantId: string | null, enabled = true) =>
@@ -175,7 +175,7 @@ export const useAdminTransactions = () =>
       const r = await axios.get(`${API_URL}/admin/transactions`, { headers: getAdminHeaders() });
       return r.data.data || [];
     },
-    refetchInterval: false,
+    refetchInterval: 10000, // auto-refresh every 10s to show new payments
   });
 
 export const useAdminActivity = () =>

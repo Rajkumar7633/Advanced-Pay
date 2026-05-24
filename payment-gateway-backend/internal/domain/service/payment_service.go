@@ -64,7 +64,7 @@ func NewPaymentService(
 		webhooks:        webhookService,
 		logger:          logger,
 		processors: map[string]providers.PaymentProcessor{
-			"razorpay": providers.NewRazorpayMock(logger),
+			"razorpay": providers.NewRazorpayProvider(logger),
 			"stripe":   providers.NewStripeMock(logger),
 			"npci":     providers.NewNPCIProcessor(logger),
 		},

@@ -111,6 +111,10 @@ export const merchantsApi = {
     api.put(`/api-keys/${id}`, { name: `Regenerated Key ${new Date().toLocaleDateString()}` }),
   revokeApiKey: (id: string) =>
     api.delete(`/api-keys/${id}`),
+  // KYC
+  submitKYC: (body: { documents: Record<string, string>; submitted_at: string }) =>
+    api.post('/merchants/kyc', body),
+
 };
 
 export type SubscriptionPlanDTO = {
