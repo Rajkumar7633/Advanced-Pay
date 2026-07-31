@@ -10,14 +10,14 @@ import (
 
 // Config holds all application configuration
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Redis    RedisConfig
-	Kafka    KafkaConfig
-	JWT      JWTConfig
-	Payment  PaymentConfig
+	Server     ServerConfig
+	Database   DatabaseConfig
+	Redis      RedisConfig
+	Kafka      KafkaConfig
+	JWT        JWTConfig
+	Payment    PaymentConfig
 	MLServices MLServicesConfig
-	SMTP     SMTPConfig
+	SMTP       SMTPConfig
 }
 
 type SMTPConfig struct {
@@ -56,11 +56,13 @@ type DatabaseConfig struct {
 
 // RedisConfig holds Redis configuration
 type RedisConfig struct {
-	Host     string
-	Port     int
-	Password string
-	DB       int
-	PoolSize int
+	Host             string
+	Port             int
+	Password         string
+	DB               int
+	PoolSize         int
+	ClusterMode      bool
+	ClusterAddresses string
 }
 
 // KafkaConfig holds Kafka configuration

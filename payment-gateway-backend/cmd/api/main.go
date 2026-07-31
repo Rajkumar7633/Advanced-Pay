@@ -18,6 +18,7 @@ import (
 	"github.com/yourcompany/payment-gateway/internal/infrastructure/cache"
 	"github.com/yourcompany/payment-gateway/internal/infrastructure/database"
 	"github.com/yourcompany/payment-gateway/internal/infrastructure/queue"
+	"github.com/yourcompany/payment-gateway/internal/infrastructure/tracing"
 	ws "github.com/yourcompany/payment-gateway/internal/infrastructure/websocket"
 	"github.com/yourcompany/payment-gateway/internal/infrastructure/worker"
 	"github.com/yourcompany/payment-gateway/pkg/logger"
@@ -32,6 +33,15 @@ func main() {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatal("Failed to load configuration", "error", err)
+	}
+
+	// Initialize distributed tracing with OpenTelemetry
+	jaegerEndpoint := os.Getenv("JAEGER_ENDPOINT")
+	if jaegerEndpoint == "" {
+		jaegerEndpoint = "http://localhost:14268/api/traces"
+	}
+	if err := tracing.InitTracer("advancepay-payment-gateway", jaegerEndpoint); err != nil {
+		log.Warn("Failed to initialize tracing", "error", err)
 	}
 
 	// Initialize database
@@ -115,12 +125,12 @@ func main() {
 	routingHandler := handlers.NewRoutingHandler(routingService)
 	fraudHandler := handlers.NewFraudHandler(transactionRepo, fraudService)
 	settlementHandler := handlers.NewSettlementHandler(settlementService, log)
-	checkoutHandler := handlers.NewCheckoutHandler(cacheClient)
+	checkoutHandler := handlers.NewCheckoutHandler(cacheClient, paymentService, log)
 	publicRoutingHandler := handlers.NewPublicRoutingHandler(routingService, cacheClient)
 	publicPaymentHandler := handlers.NewPublicPaymentHandler(paymentService, adminRepo, cacheClient)
 	vaultHandler := handlers.NewVaultHandler(vaultService, log)
 	websocketHandler := handlers.NewWebsocketHandler(pulseHub, log)
-	
+
 	emailService := service.NewEmailService(cfg.SMTP, log)
 	adminService := service.NewAdminService(adminRepo, authService, emailService, log)
 	adminHandler := handlers.NewAdminHandler(adminService, cacheClient, log, cfg.JWT.Secret, cfg.Server.AdminEmail, cfg.Server.AdminPassword)
@@ -185,15 +195,22 @@ func main() {
 	router.Use(middleware.Recovery(log))
 	router.Use(middleware.CORS())
 	router.Use(middleware.RateLimiter(cacheClient))
+	router.Use(middleware.PrometheusMetrics())
 
-	// Health check
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status":  "healthy",
-			"service": "payment-gateway-api",
-			"version": "1.0.0",
-		})
-	})
+	// Health check endpoints with dependency monitoring
+	healthHandler := handlers.NewHealthHandler(log)
+	healthHandler.AddChecker(handlers.NewDatabaseHealthChecker(db))
+	if redisClient != nil {
+		healthHandler.AddChecker(handlers.NewRedisHealthChecker(redisClient))
+	}
+
+	router.GET("/health", healthHandler.LivenessProbe)
+	router.GET("/healthz", healthHandler.ReadinessProbe)
+	router.GET("/health/detailed", healthHandler.DetailedHealthCheck)
+	router.GET("/startup", healthHandler.StartupProbe)
+
+	// Prometheus metrics endpoint
+	router.GET("/metrics", handlers.MetricsHandler())
 
 	// Public endpoints (session-token protected where needed)
 	public := router.Group("/public")
@@ -229,7 +246,7 @@ func main() {
 			public.POST("/checkout/session", checkoutHandler.CreateSession)
 			public.GET("/checkout/intent", publicPaymentHandler.GetCheckoutIntent)
 			public.GET("/routing/decision", publicRoutingHandler.GetDecision)
-			
+
 			// Secret Key Authenticated Merchant API
 			merchantApi := public.Group("")
 			merchantApi.Use(middleware.APIKeyAuth(merchantRepo, log))
@@ -347,7 +364,7 @@ func main() {
 				webhooks.GET("", paymentHandler.ListWebhooks)
 				webhooks.DELETE("/:id", middleware.RBAC("owner", "admin", "developer"), paymentHandler.DeleteWebhook)
 				webhooks.POST("/:id/test", middleware.RBAC("owner", "admin", "developer"), paymentHandler.TestWebhook)
-				
+
 				// Webhook Delivery Logs Simulator
 				webhooks.GET("/events", paymentHandler.ListWebhookEvents)
 				webhooks.POST("/events/:id/retry", middleware.RBAC("owner", "admin", "developer"), paymentHandler.RetryWebhookEvent)

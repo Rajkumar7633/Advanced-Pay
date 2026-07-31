@@ -1,0 +1,38 @@
+{
+  "name": "advancepay-sdk",
+  "version": "1.0.0",
+  "description": "Official Node.js SDK for AdvancePay Payment Gateway",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint .",
+    "build": "tsc"
+  },
+  "keywords": [
+    "payment",
+    "gateway",
+    "advancepay",
+    "sdk",
+    "payments"
+  ],
+  "author": "AdvancePay",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/uuid": "^9.0.0",
+    "typescript": "^5.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "eslint": "^8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/advancepay/advancepay-nodejs-sdk"
+  },
+  "homepage": "https://advancepay.com/docs/sdk/nodejs"
+}

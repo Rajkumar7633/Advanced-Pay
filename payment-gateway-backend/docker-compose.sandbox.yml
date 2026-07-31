@@ -1,0 +1,230 @@
+version: '3.8'
+
+# Sandbox environment for AdvancePay Payment Gateway
+# This configuration provides a safe testing environment with mock payment providers
+# and isolated resources for development and testing
+
+services:
+  # Sandbox API
+  api-sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: advancepay-api-sandbox
+    ports:
+      - "8080:8080"
+    environment:
+      ENVIRONMENT: sandbox
+      DB_HOST: postgres-sandbox
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: sandbox_password
+      DB_NAME: payment_gateway_sandbox
+      DB_SSLMODE: disable
+      
+      REDIS_HOST: redis-sandbox
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+      
+      KAFKA_BROKERS: kafka-sandbox:29092
+      KAFKA_TOPIC_TRANSACTIONS: transactions
+      KAFKA_TOPIC_WEBHOOKS: webhooks
+      
+      JWT_SECRET: sandbox_jwt_secret_change_in_production
+      PAYMENT_PROVIDERS: razorpay,stripe
+      PAYMENT_DEFAULT_PROVIDER: razorpay
+      PAYMENT_SANDBOX_MODE: "true"
+      
+      ML_SERVICES_FRAUD_URL: http://localhost:8000
+      
+      JAEGER_ENDPOINT: http://jaeger-sandbox:14268/api/traces
+      
+      ENCRYPTION_MASTER_KEY: sandbox_encryption_key
+      
+      SERVER_PORT: 8080
+      SERVER_MODE: debug
+      SERVER_READ_TIMEOUT: 30s
+      SERVER_WRITE_TIMEOUT: 30s
+      
+      # Sandbox-specific settings
+      SANDBOX_MODE: "true"
+      MOCK_PAYMENT_PROVIDERS: "true"
+      AUTO_APPROVE_PAYMENTS: "true"
+      DISABLE_FRAUD_CHECKS: "false"
+      SANDBOX_FRAUD_THRESHOLD: "0.8"
+    networks:
+      - sandbox-network
+    depends_on:
+      postgres-sandbox:
+        condition: service_healthy
+      redis-sandbox:
+        condition: service_healthy
+    volumes:
+      - ./sandbox/logs:/var/log/advancepay
+    restart: unless-stopped
+
+  # Sandbox PostgreSQL
+  postgres-sandbox:
+    image: postgres:15-alpine
+    container_name: advancepay-postgres-sandbox
+    environment:
+      POSTGRES_DB: payment_gateway_sandbox
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: sandbox_password
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-sandbox-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    command: >
+      postgres
+      -c max_connections=500
+      -c shared_buffers=1GB
+      -c effective_cache_size=3GB
+      -c maintenance_work_mem=256MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+    networks:
+      - sandbox-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Sandbox Redis
+  redis-sandbox:
+    image: redis:7-alpine
+    container_name: advancepay-redis-sandbox
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-sandbox-data:/data
+    networks:
+      - sandbox-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Sandbox Kafka
+  kafka-sandbox:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: advancepay-kafka-sandbox
+    depends_on:
+      - zookeeper-sandbox
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-sandbox:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-sandbox:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 1
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+    networks:
+      - sandbox-network
+
+  # Sandbox Zookeeper
+  zookeeper-sandbox:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: advancepay-zookeeper-sandbox
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - sandbox-network
+
+  # Sandbox Jaeger
+  jaeger-sandbox:
+    image: jaegertracing/all-in-one:latest
+    container_name: advancepay-jaeger-sandbox
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+    networks:
+      - sandbox-network
+
+  # Sandbox Prometheus
+  prometheus-sandbox:
+    image: prom/prometheus:latest
+    container_name: advancepay-prometheus-sandbox
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-sandbox-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+    networks:
+      - sandbox-network
+
+  # Sandbox Grafana
+  grafana-sandbox:
+    image: grafana/grafana:latest
+    container_name: advancepay-grafana-sandbox
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: sandbox
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - grafana-sandbox-data:/var/lib/grafana
+      - ./monitoring/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/advancepay-dashboard.json
+    networks:
+      - sandbox-network
+    depends_on:
+      - prometheus-sandbox
+
+  # Sandbox Admin Panel (Web UI)
+  admin-panel:
+    image: nginx:alpine
+    container_name: advancepay-admin-panel
+    ports:
+      - "8081:80"
+    volumes:
+      - ./sandbox/admin-panel:/usr/share/nginx/html
+    networks:
+      - sandbox-network
+    depends_on:
+      - api-sandbox
+
+  # Sandbox Test Data Generator
+  test-data-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile.test-generator
+    container_name: advancepay-test-generator
+    environment:
+      API_BASE_URL: http://api-sandbox:8080
+      MERCHANT_API_KEY: sandbox_merchant_key
+    networks:
+      - sandbox-network
+    depends_on:
+      - api-sandbox
+
+networks:
+  sandbox-network:
+    driver: bridge
+
+volumes:
+  postgres-sandbox-data:
+  redis-sandbox-data:
+  prometheus-sandbox-data:
+  grafana-sandbox-data:

@@ -1,0 +1,250 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database with High Availability Configuration
+  postgres:
+    image: postgres:15-alpine
+    container_name: advancepay-postgres
+    environment:
+      POSTGRES_DB: payment_gateway
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    command: >
+      postgres
+      -c max_connections=2000
+      -c shared_buffers=4GB
+      -c effective_cache_size=12GB
+      -c maintenance_work_mem=1GB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=2621kB
+      -c min_wal_size=2GB
+      -c max_wal_size=8GB
+    networks:
+      - advancepay-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cluster for Distributed Caching
+  redis:
+    image: redis:7-alpine
+    container_name: advancepay-redis
+    command: >
+      redis-server
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --appendonly yes
+      --appendfsync everysec
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - advancepay-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Apache Kafka for Event Streaming
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: advancepay-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+    networks:
+      - advancepay-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Zookeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: advancepay-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - advancepay-network
+
+  # Prometheus for Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: advancepay-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alerting-rules.yml:/etc/prometheus/alerting-rules.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - advancepay-network
+
+  # Grafana for Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: advancepay-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/advancepay-dashboard.json
+    networks:
+      - advancepay-network
+    depends_on:
+      - prometheus
+
+  # Jaeger for Distributed Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: advancepay-jaeger
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+    environment:
+      COLLECTOR_ZIPKIN_HOST_PORT: ":9411"
+    networks:
+      - advancepay-network
+
+  # AdvancePay Payment Gateway API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: advancepay-api
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: payment_gateway
+      DB_SSLMODE: disable
+      DB_MAX_OPEN_CONNS: 2000
+      DB_MAX_IDLE_CONNS: 500
+      DB_CONN_MAX_LIFETIME: 1800s
+      
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+      REDIS_POOL_SIZE: 100
+      REDIS_CLUSTER_MODE: false
+      
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_TOPIC_TRANSACTIONS: transactions
+      KAFKA_TOPIC_WEBHOOKS: webhooks
+      KAFKA_TOPIC_FRAUD: fraud-alerts
+      KAFKA_TOPIC_SETTLEMENTS: settlements
+      
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TOKEN_TTL: 900s
+      JWT_REFRESH_TOKEN_TTL: 604800s
+      
+      PAYMENT_PROVIDERS: razorpay,stripe
+      PAYMENT_DEFAULT_PROVIDER: razorpay
+      PAYMENT_TIMEOUT: 30s
+      PAYMENT_MAX_RETRIES: 3
+      
+      ML_SERVICES_FRAUD_URL: http://localhost:8000
+      
+      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      
+      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
+      
+      SERVER_PORT: 8080
+      SERVER_MODE: release
+      SERVER_READ_TIMEOUT: 10s
+      SERVER_WRITE_TIMEOUT: 10s
+      SERVER_IDLE_TIMEOUT: 120s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - advancepay-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy for Load Balancing
+  nginx:
+    image: nginx:alpine
+    container_name: advancepay-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - api
+    networks:
+      - advancepay-network
+    restart: unless-stopped
+
+networks:
+  advancepay-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:

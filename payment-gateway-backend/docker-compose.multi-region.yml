@@ -1,0 +1,287 @@
+version: '3.8'
+
+# Multi-region deployment configuration for AdvancePay Payment Gateway
+# This configuration supports deployment across multiple geographic regions
+# with automatic failover and load balancing
+
+services:
+  # Region: US-East (Primary)
+  api-us-east:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: advancepay-api-us-east
+    ports:
+      - "8080:8080"
+    environment:
+      REGION: us-east
+      DB_HOST: postgres-us-east
+      REDIS_HOST: redis-us-east
+      KAFKA_BROKERS: kafka-us-east:29092
+      JAEGER_ENDPOINT: http://jaeger-us-east:14268/api/traces
+      ENABLE_REGION_FAILOVER: "true"
+      BACKUP_REGIONS: us-west,eu-west
+    networks:
+      - us-east-network
+    depends_on:
+      postgres-us-east:
+        condition: service_healthy
+      redis-US-east:
+        condition: service_healthy
+
+  postgres-us-east:
+    image: postgres:15-alpine
+    container_name: advancepay-postgres-us-east
+    environment:
+      POSTGRES_DB: payment_gateway
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_REPLICATION_MODE: master
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-us-east-data:/var/lib/postgresql/data
+    command: >
+      postgres
+      -c max_connections=2000
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+    networks:
+      - us-east-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis-us-east:
+    image: redis:7-alpine
+    container_name: advancepay-redis-us-east
+    command: >
+      redis-server
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-us-east-data:/data
+    networks:
+      - us-east-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka-us-east:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: advancepay-kafka-us-east
+    depends_on:
+      - zookeeper-us-east
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-us-east:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-us-east:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - us-east-network
+
+  zookeeper-us-east:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: advancepay-zookeeper-us-east
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - us-east-network
+
+  jaeger-us-east:
+    image: jaegertracing/all-in-one:latest
+    container_name: advancepay-jaeger-us-east
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+    networks:
+      - us-east-network
+
+  prometheus-us-east:
+    image: prom/prometheus:latest
+    container_name: advancepay-prometheus-us-east
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-us-east-data:/prometheus
+    networks:
+      - us-east-network
+
+  grafana-us-east:
+    image: grafana/grafana:latest
+    container_name: advancepay-grafana-us-east
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+    volumes:
+      - grafana-us-east-data:/var/lib/grafana
+    networks:
+      - us-east-network
+
+  # Region: US-West (Secondary/Backup)
+  api-us-west:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: advancepay-api-us-west
+    ports:
+      - "8081:8080"
+    environment:
+      REGION: us-west
+      DB_HOST: postgres-us-west
+      REDIS_HOST: redis-us-west
+      KAFKA_BROKERS: kafka-us-west:29092
+      JAEGER_ENDPOINT: http://jaeger-us-west:14268/api/traces
+      ENABLE_REGION_FAILOVER: "true"
+      BACKUP_REGIONS: us-east,eu-west
+    networks:
+      - us-west-network
+    depends_on:
+      postgres-us-west:
+        condition: service_healthy
+      redis-us-west:
+        condition: service_healthy
+
+  postgres-us-west:
+    image: postgres:15-alpine
+    container_name: advancepay-postgres-us-west
+    environment:
+      POSTGRES_DB: payment_gateway
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_REPLICATION_MODE: slave
+      POSTGRES_MASTER_HOST: postgres-us-east
+      POSTGRES_MASTER_PORT: 5432
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-us-west-data:/var/lib/postgresql/data
+    command: >
+      postgres
+      -c max_connections=2000
+      -c hot_standby=on
+    networks:
+      - us-west-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis-us-west:
+    image: redis:7-alpine
+    container_name: advancepay-redis-us-west
+    command: >
+      redis-server
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-us-west-data:/data
+    networks:
+      - us-west-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka-us-west:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: advancepay-kafka-us-west
+    depends_on:
+      - zookeeper-us-west
+    ports:
+      - "9093:9092"
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-us-west:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-us-west:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - us-west-network
+
+  zookeeper-us-west:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: advancepay-zookeeper-us-west
+    ports:
+      - "2182:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - us-west-network
+
+  # Global Load Balancer (Nginx)
+  nginx-lb:
+    image: nginx:alpine
+    container_name: advancepay-nginx-lb
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx-lb.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    networks:
+      - us-east-network
+      - us-west-network
+    depends_on:
+      - api-us-east
+      - api-us-west
+    restart: unless-stopped
+
+  # Global Monitoring
+  prometheus-global:
+    image: prom/prometheus:latest
+    container_name: advancepay-prometheus-global
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./monitoring/prometheus-global.yml:/etc/prometheus/prometheus.yml
+      - prometheus-global-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - us-east-network
+      - us-west-network
+
+networks:
+  us-east-network:
+    driver: bridge
+  us-west-network:
+    driver: bridge
+
+volumes:
+  postgres-us-east-data:
+  redis-us-east-data:
+  prometheus-us-east-data:
+  grafana-us-east-data:
+  postgres-us-west-data:
+  redis-us-west-data:
+  prometheus-global-data:

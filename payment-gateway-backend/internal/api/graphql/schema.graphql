@@ -1,0 +1,328 @@
+# GraphQL Schema for AdvancePay Payment Gateway
+
+scalar DateTime
+scalar UUID
+
+type Query {
+  # Payment queries
+  payment(id: UUID!): Payment
+  payments(filter: PaymentFilter, limit: Int = 20, offset: Int = 0): PaymentConnection
+  transaction(id: UUID!): Transaction
+  
+  # Merchant queries
+  merchant(id: UUID!): Merchant
+  merchants(filter: MerchantFilter, limit: Int = 20, offset: Int = 0): MerchantConnection
+  
+  # Checkout queries
+  checkoutSession(id: UUID!): CheckoutSession
+  paymentMethods: [PaymentMethod!]!
+  
+  # Analytics queries
+  analytics(period: AnalyticsPeriod!, merchantId: UUID): Analytics
+  
+  # Health check
+  health: HealthStatus
+}
+
+type Mutation {
+  # Payment mutations
+  createPayment(input: CreatePaymentInput!): Payment
+  capturePayment(transactionId: UUID!): Transaction
+  refundPayment(input: RefundPaymentInput!): Refund
+  
+  # Checkout mutations
+  createCheckoutSession(input: CreateCheckoutSessionInput!): CheckoutSession
+  processCheckoutPayment(sessionId: UUID!, input: ProcessCheckoutPaymentInput!): PaymentResult
+  cancelCheckoutSession(sessionId: UUID!): CheckoutSession
+  
+  # Merchant mutations
+  createMerchant(input: CreateMerchantInput!): Merchant
+  updateMerchant(id: UUID!, input: UpdateMerchantInput!): Merchant
+  
+  # Webhook mutations
+  createWebhook(input: CreateWebhookInput!): Webhook
+  deleteWebhook(id: UUID!): Boolean
+}
+
+type Subscription {
+  # Real-time payment updates
+  paymentUpdated(transactionId: UUID!): Transaction
+  paymentCreated(merchantId: UUID!): Payment
+  
+  # Real-time analytics
+  analyticsUpdated(merchantId: UUID!): Analytics
+}
+
+# Types
+type Payment {
+  id: UUID!
+  orderId: String!
+  amount: Float!
+  currency: String!
+  status: PaymentStatus!
+  paymentMethod: String!
+  customerEmail: String!
+  customerPhone: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  transaction: Transaction
+  metadata: Map
+}
+
+type Transaction {
+  id: UUID!
+  paymentId: UUID!
+  amount: Float!
+  currency: String!
+  status: TransactionStatus!
+  paymentMethod: String!
+  provider: String!
+  providerTransactionId: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  fraudScore: Float
+  metadata: Map
+}
+
+type Merchant {
+  id: UUID!
+  name: String!
+  email: String!
+  apiKey: String!
+  status: MerchantStatus!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  payments(limit: Int = 20): [Payment!]!
+  analytics(period: AnalyticsPeriod!): Analytics
+}
+
+type CheckoutSession {
+  id: UUID!
+  merchantId: UUID!
+  orderId: String!
+  amount: Float!
+  currency: String!
+  customerEmail: String!
+  customerPhone: String
+  customerName: String
+  description: String
+  paymentMethods: [String!]!
+  status: CheckoutSessionStatus!
+  paymentUrl: String!
+  expiresAt: DateTime!
+  createdAt: DateTime!
+  metadata: Map
+}
+
+type PaymentMethod {
+  id: String!
+  name: String!
+  displayName: String!
+  icon: String!
+  enabled: Boolean!
+  fields: [String!]!
+}
+
+type Refund {
+  id: UUID!
+  transactionId: UUID!
+  amount: Float!
+  reason: String!
+  status: RefundStatus!
+  createdAt: DateTime!
+}
+
+type Webhook {
+  id: UUID!
+  merchantId: UUID!
+  url: String!
+  events: [String!]!
+  secret: String!
+  active: Boolean!
+  createdAt: DateTime!
+}
+
+type Analytics {
+  period: AnalyticsPeriod!
+  totalRevenue: Float!
+  totalTransactions: Int!
+  successRate: Float!
+  averageOrderValue: Float!
+  paymentMethods: [PaymentMethodAnalytics!]!
+  dailyRevenue: [DailyRevenue!]!
+  fraudRate: Float!
+}
+
+type PaymentMethodAnalytics {
+  method: String!
+  count: Int!
+  amount: Float!
+  percentage: Float!
+}
+
+type DailyRevenue {
+  date: DateTime!
+  revenue: Float!
+  transactions: Int!
+}
+
+type HealthStatus {
+  status: String!
+  database: HealthCheck!
+  redis: HealthCheck!
+  kafka: HealthCheck!
+}
+
+type HealthCheck {
+  status: String!
+  latency: Int
+  message: String
+}
+
+# Connections for pagination
+type PaymentConnection {
+  edges: [PaymentEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type PaymentEdge {
+  node: Payment!
+  cursor: String!
+}
+
+type MerchantConnection {
+  edges: [MerchantEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type MerchantEdge {
+  node: Merchant!
+  cursor: String!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+# Input types
+input CreatePaymentInput {
+  orderId: String!
+  amount: Float!
+  currency: String!
+  paymentMethod: String!
+  customerEmail: String!
+  customerPhone: String
+  customerName: String
+  description: String
+  metadata: Map
+}
+
+input RefundPaymentInput {
+  transactionId: UUID!
+  amount: Float!
+  reason: String!
+}
+
+input CreateCheckoutSessionInput {
+  orderId: String!
+  amount: Float!
+  currency: String!
+  customerEmail: String!
+  customerPhone: String
+  customerName: String
+  description: String
+  paymentMethods: [String!]
+  successUrl: String
+  cancelUrl: String
+  expiryMinutes: Int
+  metadata: Map
+}
+
+input ProcessCheckoutPaymentInput {
+  paymentMethod: String!
+  paymentDetails: Map!
+}
+
+input CreateMerchantInput {
+  name: String!
+  email: String!
+  password: String!
+  businessType: String!
+}
+
+input UpdateMerchantInput {
+  name: String
+  email: String
+  businessType: String
+}
+
+input CreateWebhookInput {
+  merchantId: UUID!
+  url: String!
+  events: [String!]!
+}
+
+input PaymentFilter {
+  status: PaymentStatus
+  paymentMethod: String
+  startDate: DateTime
+  endDate: DateTime
+  merchantId: UUID
+}
+
+input MerchantFilter {
+  status: MerchantStatus
+  businessType: String
+}
+
+# Enums
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum MerchantStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum CheckoutSessionStatus {
+  CREATED
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum RefundStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum AnalyticsPeriod {
+  TODAY
+  WEEK
+  MONTH
+  YEAR
+  CUSTOM
+}
+
+# Custom scalar for map
+scalar Map

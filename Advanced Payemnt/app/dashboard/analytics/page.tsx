@@ -176,23 +176,24 @@ export default function AnalyticsPage() {
 
         {/* ── MRR / ARR Banner ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[
-            { label: 'Monthly Recurring Revenue (MRR)', value: formatCurrency(mrr), icon: Calendar, color: 'indigo' },
-            { label: 'Annual Run Rate (ARR)',            value: formatCurrency(arr), icon: Globe,    color: 'violet' },
-          ].map(item => (
-            <div
-              key={item.label}
-              className={`flex items-center gap-6 p-6 rounded-2xl bg-${item.color}-500/10 border border-${item.color}-500/20 backdrop-blur-sm`}
-            >
-              <div className={`w-14 h-14 rounded-2xl bg-${item.color}-500/20 flex items-center justify-center flex-shrink-0`}>
-                <item.icon className={`w-7 h-7 text-${item.color}-400`} />
-              </div>
-              <div>
-                <p className="text-white/40 text-xs font-bold uppercase tracking-widest mb-1">{item.label}</p>
-                <p className="text-3xl font-black text-white">{item.value}</p>
-              </div>
+          <div className="flex items-center gap-6 p-6 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 backdrop-blur-sm">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
+              <Calendar className="w-7 h-7 text-indigo-400" />
             </div>
-          ))}
+            <div>
+              <p className="text-white/40 text-xs font-bold uppercase tracking-widest mb-1">Monthly Recurring Revenue (MRR)</p>
+              <p className="text-3xl font-black text-white">{formatCurrency(mrr)}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-6 p-6 rounded-2xl bg-violet-500/10 border border-violet-500/20 backdrop-blur-sm">
+            <div className="w-14 h-14 rounded-2xl bg-violet-500/20 flex items-center justify-center flex-shrink-0">
+              <Globe className="w-7 h-7 text-violet-400" />
+            </div>
+            <div>
+              <p className="text-white/40 text-xs font-bold uppercase tracking-widest mb-1">Annual Run Rate (ARR)</p>
+              <p className="text-3xl font-black text-white">{formatCurrency(arr)}</p>
+            </div>
+          </div>
         </div>
 
         {/* ── Revenue Trend + Success Rate ── */}

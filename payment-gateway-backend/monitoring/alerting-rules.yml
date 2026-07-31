@@ -1,0 +1,155 @@
+groups:
+  - name: advancepay_alerts
+    interval: 30s
+    rules:
+      # Critical Payment Alerts
+      - alert: HighPaymentFailureRate
+        expr: |
+          sum(rate(payments_total{status="failed"}[5m])) / sum(rate(payments_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          service: payment-gateway
+        annotations:
+          summary: "High payment failure rate detected"
+          description: "Payment failure rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+
+      - alert: PaymentProcessingLatencyHigh
+        expr: |
+          histogram_quantile(0.95, rate(payment_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: payment-gateway
+        annotations:
+          summary: "Payment processing latency is high"
+          description: "95th percentile payment latency is {{ $value }}s"
+
+      # Database Alerts
+      - alert: DatabaseConnectionPoolExhausted
+        expr: |
+          db_connections_active / db_connections_active > 0.9
+        for: 2m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "{{ $value | humanizePercentage }} of database connections are active"
+
+      - alert: DatabaseQueryLatencyHigh
+        expr: |
+          histogram_quantile(0.95, rate(db_query_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "Database query latency is high"
+          description: "95th percentile query latency is {{ $value }}s"
+
+      # Circuit Breaker Alerts
+      - alert: CircuitBreakerOpen
+        expr: |
+          circuit_breaker_state == 1
+        for: 1m
+        labels:
+          severity: critical
+          service: circuit-breaker
+        annotations:
+          summary: "Circuit breaker is open for {{ $labels.service }}"
+          description: "Service {{ $labels.service }} circuit breaker has opened due to failures"
+
+      # Cache Alerts
+      - alert: LowCacheHitRate
+        expr: |
+          rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          service: cache
+        annotations:
+          summary: "Low cache hit rate for {{ $labels.cache_type }}"
+          description: "Cache hit rate is {{ $value | humanizePercentage }}"
+
+      # Queue Alerts
+      - alert: HighConsumerLag
+        expr: |
+          queue_lag_seconds > 60
+        for: 2m
+        labels:
+          severity: warning
+          service: queue
+        annotations:
+          summary: "High consumer lag for {{ $labels.topic }}"
+          description: "Consumer {{ $labels.consumer_group }} is {{ $value }}s behind"
+
+      # Fraud Detection Alerts
+      - alert: HighFraudRate
+        expr: |
+          sum(rate(fraud_blocked_total[5m])) / sum(rate(payments_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: fraud-detection
+        annotations:
+          summary: "High fraud detection rate"
+          description: "{{ $value | humanizePercentage }} of transactions are being blocked as fraud"
+
+      # Webhook Alerts
+      - alert: WebhookDeliveryFailureRate
+        expr: |
+          sum(rate(webhook_deliveries_total{status="failed"}[5m])) / sum(rate(webhook_deliveries_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: webhooks
+        annotations:
+          summary: "High webhook delivery failure rate"
+          description: "{{ $value | humanizePercentage }} of webhook deliveries are failing"
+
+      # System Resource Alerts
+      - alert: HighMemoryUsage
+        expr: |
+          system_memory_usage_bytes / (1024*1024*1024) > 8
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}GB"
+
+      - alert: HighGoroutineCount
+        expr: |
+          system_goroutines > 10000
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High goroutine count"
+          description: "Goroutine count is {{ $value }}"
+
+      # TPS Alerts
+      - alert: LowTPS
+        expr: |
+          sum(rate(http_requests_total[1m])) < 100
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "Low transaction throughput"
+          description: "Current TPS is {{ $value }}, expected minimum 100"
+
+      - alert: TPSDropping
+        expr: |
+          sum(rate(http_requests_total[1m])) < (sum(rate(http_requests_total[5m] offset 5m)) * 0.5)
+        for: 2m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "TPS dropping rapidly"
+          description: "Current TPS {{ $value }} is less than 50% of previous 5-minute average"

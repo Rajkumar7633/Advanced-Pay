@@ -1,0 +1,242 @@
+{
+  "dashboard": {
+    "title": "AdvancePay Payment Gateway - Production",
+    "uid": "advancepay-production",
+    "tags": ["payment", "gateway", "production"],
+    "timezone": "browser",
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate (TPS)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[1m])",
+            "legendFormat": "{{method}} {{endpoint}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Payment Success Rate",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 0, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(payments_total{status=\"success\"}[5m])) / sum(rate(payments_total[5m])) * 100"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 95},
+                {"color": "green", "value": 99}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Active Database Connections",
+        "type": "gauge",
+        "gridPos": {"x": 18, "y": 0, "w": 6, "h": 8},
+        "targets": [
+          {
+            "expr": "db_connections_active"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "max": 1000,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 400},
+                {"color": "red", "value": 800}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Payment Processing Duration",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(payment_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile - {{provider}}"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(payment_duration_seconds_bucket[5m]))",
+            "legendFormat": "50th percentile - {{provider}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Circuit Breaker States",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "circuit_breaker_state",
+            "legendFormat": "{{service}} ({{value}})"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "Closed", "color": "green"}}},
+              {"type": "value", "options": {"1": {"text": "Open", "color": "red"}}},
+              {"type": "value", "options": {"2": {"text": "Half-Open", "color": "yellow"}}}
+            ]
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Cache Hit Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) * 100",
+            "legendFormat": "{{cache_type}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Fraud Detection Score Distribution",
+        "type": "heatmap",
+        "gridPos": {"x": 8, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(fraud_score_bucket[5m])",
+            "legendFormat": "{{model}}"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Queue Consumer Lag",
+        "type": "graph",
+        "gridPos": {"x": 16, "y": 16, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "queue_lag_seconds",
+            "legendFormat": "{{topic}} - {{consumer_group}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "System Resources",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "system_memory_usage_bytes / 1024 / 1024 / 1024",
+            "legendFormat": "Memory (GB)"
+          },
+          {
+            "expr": "system_goroutines",
+            "legendFormat": "Goroutines"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Webhook Delivery Success Rate",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(webhook_deliveries_total{status=\"success\"}[5m])) / sum(rate(webhook_deliveries_total[5m])) * 100"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 90},
+                {"color": "green", "value": 95}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Payment Volume by Provider",
+        "type": "piechart",
+        "gridPos": {"x": 0, "y": 32, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(payments_total[5m])) by (provider)"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Payment Volume by Method",
+        "type": "piechart",
+        "gridPos": {"x": 8, "y": 32, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(payments_total[5m])) by (method)"
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Database Query Performance",
+        "type": "graph",
+        "gridPos": {"x": 16, "y": 32, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(db_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th - {{operation}} {{table}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      }
+    ]
+  }
+}

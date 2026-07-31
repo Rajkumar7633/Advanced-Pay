@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 import numpy as np
@@ -10,6 +11,15 @@ from sklearn.pipeline import Pipeline
 import pandas as pd
 
 app = FastAPI(title="Fraud Detection ML Service", version="2.0.0")
+
+# Add CORS middleware to allow cross-origin requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods including OPTIONS
+    allow_headers=["*"],  # Allow all headers
+)
 
 # ─────────────────────────────────────────────
 # MODEL TRAINING (runs once at startup)
